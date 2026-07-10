@@ -1,0 +1,47 @@
+{
+  "study_title": "Comparative Effectiveness Observational Cohort",
+  "output_name": "observational-cohort",
+  "study_type": "observational real-world cohort study",
+  "clinical_area": "cardiology",
+  "population": "Adults initiating standard care or a new therapy",
+  "data_file": "observational_patients.csv",
+  "id_column": "patient_id",
+  "group_column": "treatment",
+  "groups": [
+    {"value": "Standard", "label": "Standard care"},
+    {"value": "New therapy", "label": "New therapy"}
+  ],
+  "variables": [
+    {"name": "age", "label": "Age", "unit": "y", "type": "continuous", "summary": "mean_sd"},
+    {"name": "sex", "label": "Sex", "type": "categorical", "levels": ["Female", "Male"]},
+    {"name": "bmi", "label": "Body mass index", "unit": "kg/m2", "type": "continuous", "summary": "mean_sd"},
+    {"name": "diabetes", "label": "Diabetes", "type": "categorical", "levels": ["Yes", "No"]},
+    {"name": "severity", "label": "Baseline disease severity", "type": "categorical", "levels": ["Mild", "Moderate", "Severe"]},
+    {"name": "prior_visits", "label": "Prior-year visits", "type": "continuous", "summary": "median_iqr"}
+  ],
+  "include_overall": true,
+  "include_smd": true,
+  "include_p_values": false,
+  "show_missing": true,
+  "time_zero": "First eligible treatment initiation after a 365-day lookback",
+  "comparator": "New therapy versus standard care",
+  "matching": {
+    "method": "1:1 propensity-score matching",
+    "covariates": "DAG-defined pre-index confounders",
+    "caliper": "0.2 SD of the logit propensity score",
+    "replacement": "No"
+  },
+  "analysis_stage": "pre-matching baseline cohort",
+  "matching_status": "planned",
+  "imputation_status": "planned",
+  "missing_data": "Multiple imputation by chained equations before propensity-score estimation",
+  "sensitivity_analyses": [
+    "Complete-case versus multiply imputed analysis",
+    "Overlap weighting instead of matching",
+    "E-value for the primary effect estimate"
+  ],
+  "notes": [
+    "Primary endpoint and safety endpoint are prespecified.",
+    "Sex subgroup heterogeneity and negative-control outcome are assessed."
+  ]
+}

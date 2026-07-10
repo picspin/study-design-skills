@@ -1,0 +1,21 @@
+patient_id,treatment,age,sex,bmi,diabetes,severity,prior_visits
+P001,Standard,68,Female,27.4,Yes,Moderate,3
+P002,Standard,59,Male,25.2,No,Mild,1
+P003,Standard,74,Female,29.1,Yes,Severe,5
+P004,Standard,63,Male,26.8,No,Moderate,2
+P005,Standard,57,Female,24.9,No,Mild,1
+P006,Standard,71,Male,30.2,Yes,Severe,4
+P007,Standard,66,Female,,No,Moderate,2
+P008,Standard,61,Male,28.0,Yes,Moderate,3
+P009,Standard,69,Female,27.1,No,Severe,4
+P010,Standard,55,Male,23.8,No,Mild,0
+P011,New therapy,65,Female,26.7,Yes,Moderate,2
+P012,New therapy,58,Male,24.6,No,Mild,1
+P013,New therapy,72,Female,28.4,Yes,Severe,4
+P014,New therapy,60,Male,25.9,No,Moderate,2
+P015,New therapy,56,Female,24.2,No,Mild,1
+P016,New therapy,70,Male,29.7,Yes,Severe,3
+P017,New therapy,64,Female,26.1,No,Moderate,2
+P018,New therapy,62,Male,,No,Moderate,1
+P019,New therapy,67,Female,27.5,Yes,Severe,3
+P020,New therapy,54,Male,23.5,No,Mild,0
