@@ -513,13 +513,19 @@ def flow_steps(spec):
             node("Controlled segmented-regression analysis", "primary_analysis"),
         ]
     if any(term in study for term in ["interrupted time series", "difference-in-differences", "difference in differences"]):
+        primary = spec.get("primary_objective") or "Primary level/slope or group-by-time effect"
+        secondary = spec.get("secondary_objectives") or ["Implementation, workflow, safety, subgroup, and robustness analyses"]
+        if isinstance(secondary, str):
+            secondary = [secondary]
         return [
-            node("Clinical/site stream and sampling frame", "source_population"),
-            node("Stable eligibility and outcome definition", "eligible_at_time_zero"),
-            node("Repeated pre-intervention observations", "pre_time_points"),
-            node("Deployment/rollout and transition period", "intervention_point"),
-            node("Repeated post-intervention observations", "post_time_points"),
-            node("Segmented-regression or event-study analysis", "primary_analysis"),
+            node("Clinical departments and source encounters", "source_population"),
+            node("Stable eligibility, adverse-event definition, and denominator", "eligible_at_time_zero"),
+            node("Repeated pre-rollout department-period observations", "pre_time_points"),
+            node("Nonrandom rollout waves and prespecified ramp-up", "intervention_point"),
+            node("Overlapping not-yet-treated/partial-control periods", "control_time_points"),
+            node("Repeated post-rollout observations; excluded periods shown", "post_time_points"),
+            node(f"Primary event-study/DiD analysis: {primary}", "primary_analysis"),
+            node("Secondary analysis sets: " + "; ".join(str(item) for item in secondary), "secondary_analysis"),
         ]
     if any(term in study for term in ["observational", "cohort", "rwe", "real-world"]):
         return [

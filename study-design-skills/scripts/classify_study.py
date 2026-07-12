@@ -255,6 +255,12 @@ def inferred_answers(spec):
         inferred["primary_aim"] = "intervention_effect"
     elif any(term in proposal for term in ["相关性", "association", "风险因素", "risk factor"]):
         inferred["primary_aim"] = "association_risk"
+    if any(term in proposal for term in ["回顾性", "retrospective"]) and any(term in proposal for term in ["电子病历", "ehr", "信息系统", "影像", "routine data"]):
+        inferred["data_source"] = "retrospective_ehr"
+    elif any(term in proposal for term in ["登记", "registry", "claims", "理赔"]):
+        inferred["data_source"] = "registry_claims"
+    elif any(term in proposal for term in ["前瞻性", "prospective"]) and any(term in proposal for term in ["专门采集", "primary collection", "研究采集"]):
+        inferred["data_source"] = "prospective_primary"
     return inferred
 
 

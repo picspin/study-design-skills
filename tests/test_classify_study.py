@@ -62,6 +62,15 @@ class StudyTriageTests(unittest.TestCase):
         self.assertEqual(result["inferred_answers"]["primary_aim"], "intervention_effect")
         self.assertNotIn("questions", result)
 
+    def test_retrospective_ehr_is_inferred_without_reasking(self):
+        spec = {
+            "proposal": "回顾性电子病历记录和影像学资料，评价LLM预警系统分阶段上线后的不良事件变化",
+            "answers": {"rollout_structure": "nonrandom_staggered", "concurrent_control": "partial"},
+        }
+        result = MODULE.triage(spec)
+        self.assertEqual(result["inferred_answers"]["data_source"], "retrospective_ehr")
+        self.assertNotEqual(result["next_question"]["id"], "data_source")
+
     def test_llm_quality_control_converges_to_cits(self):
         spec = {
             "proposal": "引入LLM智能体质控和监测预警系统，与传统工作流比较不良事件",

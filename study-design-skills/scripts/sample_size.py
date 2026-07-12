@@ -151,6 +151,22 @@ def estimate_sample_size(spec):
             "missing": ["sample_size.method", "design-specific effect or precision assumptions", "alpha", "power or confidence-width target", "loss/incomplete-pair allowance"],
             "caveats": ["Do not infer an effect size from the observed study data after enrollment. Use external evidence, pilot data, or a clinically meaningful target."],
         }
+    if method in {"did_event_study_simulation", "its_simulation"}:
+        return {
+            "status": "assumptions_required",
+            "method": method,
+            "missing": [
+                "number of departments/clusters and rollout waves",
+                "pre- and post-rollout time points per cluster",
+                "baseline event rate with encounter or patient-time denominator",
+                "clinically meaningful level/rate-ratio and dynamic effect trajectory",
+                "between-cluster heterogeneity and within-cluster serial correlation",
+                "count distribution/overdispersion and seasonal structure",
+                "partial-control overlap and anticipated missing periods",
+                "alpha, power, attrition and multiplicity choices",
+            ],
+            "caveats": ["Use simulation under the planned fixed-effects/event-study or segmented count model. Report power across plausible pre-trend, overdispersion, and partial-control scenarios."],
+        }
     if method not in METHODS:
         return {"status": "unsupported", "method": method, "missing": ["A supported method or an externally validated calculation"], "caveats": ["Use dedicated software or simulation and store its assumptions/results in the specification."]}
     try:
