@@ -10,9 +10,34 @@ SCRIPT = Path(__file__).parents[1] / "study-design-skills" / "scripts" / "classi
 SPEC = importlib.util.spec_from_file_location("classify_study", SCRIPT)
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
+SAMPLE_SCRIPT = SCRIPT.parent / "sample_size.py"
+SAMPLE_SPEC = importlib.util.spec_from_file_location("sample_size", SAMPLE_SCRIPT)
+SAMPLE_MODULE = importlib.util.module_from_spec(SAMPLE_SPEC)
+SAMPLE_SPEC.loader.exec_module(SAMPLE_MODULE)
 
 
 class StudyTriageTests(unittest.TestCase):
+    def test_parallel_rct_sample_size_reports_analyzable_and_recruited(self):
+        result = SAMPLE_MODULE.estimate_sample_size({"sample_size": {
+            "method": "parallel_proportions",
+            "control_event_rate": 0.25,
+            "intervention_event_rate": 0.38,
+            "alpha": 0.05,
+            "power": 0.80,
+            "loss_fraction": 0.15,
+        }})
+        self.assertEqual(result["status"], "estimated")
+        self.assertGreater(result["recruited_n"], result["analyzable_n"])
+        self.assertGreater(result["analyzable_n"], 350)
+
+    def test_paired_sample_size_requires_directional_discordance(self):
+        result = SAMPLE_MODULE.estimate_sample_size({"sample_size": {
+            "method": "paired_binary",
+            "discordant_control_only": 0.075,
+            "discordant_intervention_only": 0.075,
+        }})
+        self.assertEqual(result["status"], "assumptions_required")
+
     def test_paired_imaging_does_not_trigger_ai_overlay(self):
         spec = {
             "proposal": "Prospective paired comparative imaging study with randomized order",

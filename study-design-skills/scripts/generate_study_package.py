@@ -24,6 +24,7 @@ from design_study import (
     render_footnote,
     score_study_design,
 )
+from sample_size import estimate_sample_size
 
 try:
     from scipy import stats
@@ -533,9 +534,37 @@ def flow_steps(spec):
             node("MI, complete-case, and alternative-design sensitivity cohorts", "sensitivity_analysis"),
         ]
     if any(term in study for term in ["rct", "randomized", "trial"]):
-        return ["Assessed for eligibility", "Excluded", "Randomized", "Allocated by arm", "Followed up", "Analyzed by arm"]
+        primary = spec.get("primary_objective") or "Primary outcome and estimand assessed by randomized arm"
+        secondary = spec.get("secondary_objectives") or ["Secondary effectiveness, diagnostic, safety, and follow-up analyses"]
+        if isinstance(secondary, str):
+            secondary = [secondary]
+        return [
+            node("Source population assessed for eligibility", "source_population"),
+            node("Eligible and consented before randomization", "eligible_at_time_zero"),
+            node(f"Time zero: {spec.get('time_zero', 'randomization')}", "time_zero"),
+            node("Randomized with allocation concealment", "randomized"),
+            node("Allocated intervention and control arms", "allocated"),
+            node("Intervention/test completed; failures and crossovers retained", "completed_intervention"),
+            node(f"Primary ITT analysis: {primary}", "primary_analysis"),
+            node("Secondary analysis sets: " + "; ".join(str(item) for item in secondary), "secondary_analysis"),
+        ]
     if any(term in study for term in ["diagnostic", "radiology", "imaging"]):
-        return ["Assessed for eligibility", "Index test", "Reference standard", "Disease present/absent", "Indeterminate or missing tests", "Accuracy analysis"]
+        primary = spec.get("primary_objective") or "Primary diagnostic-accuracy or paired-comparison analysis"
+        secondary = spec.get("secondary_objectives") or ["Reader, lesion, subgroup, management-impact, and safety analyses"]
+        if isinstance(secondary, str):
+            secondary = [secondary]
+        paired = "comparative" in study or "paired" in text_norm(spec.get("comparator"))
+        test_step = "Both index tests completed in randomized order" if paired else "Index test completed"
+        return [
+            node("One-gate source population assessed", "source_population"),
+            node("Eligible and consented participants", "eligible_at_time_zero"),
+            node(test_step, "index_tests_complete"),
+            node("Independent interpretation; indeterminate and failed tests retained", "interpretable_tests"),
+            node("Common reference standard completed", "reference_standard_complete"),
+            node("Complete paired/accuracy analysis set", "primary_analysis"),
+            node(f"Primary analysis: {primary}", "primary_analysis"),
+            node("Secondary analysis sets: " + "; ".join(str(item) for item in secondary), "secondary_analysis"),
+        ]
     if any(term in study for term in ["ai", "cdss", "triage", "workflow"]):
         return ["Eligible encounters", "AI trigger", "Output generated", "Shown to clinician", "Accepted/modified/overridden", "Downstream action", "Safety and outcome ascertainment"]
     if any(term in study for term in ["systematic review", "meta-analysis"]):
@@ -595,6 +624,7 @@ def write_xlsx(path, spec, columns, rows, journals, categories, scoring):
     table_sheet.title = output_table_name(spec)
     journal_sheet = workbook.create_sheet("Journal Fit")
     score_sheet = workbook.create_sheet("Benchmark")
+    sample_sheet = workbook.create_sheet("Sample Size")
     notes_sheet = workbook.create_sheet("Methods Notes")
 
     dark = "162B36"
@@ -696,6 +726,25 @@ def write_xlsx(path, spec, columns, rows, journals, categories, scoring):
     score_sheet.column_dimensions["C"].width = 18
     score_sheet.column_dimensions["D"].width = 56
 
+    sample = estimate_sample_size(spec)
+    sample_sheet.append(["Sample Size Estimation", "Value"])
+    sample_sheet.append(["Status", sample["status"]])
+    sample_sheet.append(["Method", sample.get("method", "")])
+    if sample["status"] == "estimated":
+        sample_sheet.append(["Analyzable sample", f"{sample['analyzable_n']} {sample['unit']}"])
+        sample_sheet.append(["Recruitment target", f"{sample['recruited_n']} {sample['recruited_unit']}"])
+        sample_sheet.append(["Formula", sample["formula"]])
+        for key, value in sample["assumptions"].items():
+            sample_sheet.append([f"Assumption: {key}", value])
+    else:
+        for item in sample.get("missing", []):
+            sample_sheet.append(["Required input", item])
+    for item in sample.get("caveats", []):
+        sample_sheet.append(["Caveat", item])
+    style_sheet(sample_sheet, 2, dark, accent, white, thin, header_row=1)
+    sample_sheet.column_dimensions["A"].width = 34
+    sample_sheet.column_dimensions["B"].width = 110
+
     notes = [
         ["Confirmed design", spec.get("confirmed_design", "Not triaged")],
         ["Study type", spec.get("study_type", "")],
@@ -774,6 +823,19 @@ def write_html(path, spec, columns, rows, journals, categories, scoring):
     warnings_html = "".join(f"<li>{html.escape(item)}</li>" for item in infer_design_warnings(spec))
     requirements_html = "".join(f"<li>{html.escape(item)}</li>" for item in category_benchmark_requirements(categories))
     benchmark_family = " / ".join(item["journal"] for item in journals[:3])
+    sample = estimate_sample_size(spec)
+    if sample["status"] == "estimated":
+        assumption_rows = "".join(f"<tr><td>{html.escape(str(key))}</td><td>{html.escape(str(value))}</td></tr>" for key, value in sample["assumptions"].items())
+        sample_html = (
+            f'<div class="scores"><div class="panel"><div class="label">Analyzable sample</div><div class="big">{sample["analyzable_n"]}</div><div>{html.escape(sample["unit"])}</div></div>'
+            f'<div class="panel"><div class="label">Recruitment target</div><div class="big">{sample["recruited_n"]}</div><div>{html.escape(sample["recruited_unit"])}</div></div></div>'
+            f'<div class="panel"><strong>{html.escape(sample["method"])}</strong><p><code>{html.escape(sample["formula"])}</code></p></div>'
+            f'<div class="table-wrap"><table><thead><tr><th>Assumption</th><th>Value</th></tr></thead><tbody>{assumption_rows}</tbody></table></div>'
+        )
+    else:
+        required = "".join(f"<li>{html.escape(item)}</li>" for item in sample.get("missing", []))
+        sample_html = f'<div class="panel warning"><strong>Sample size not calculated</strong><p>Method: {html.escape(sample.get("method", "Not specified"))}</p><ul>{required}</ul></div>'
+    sample_caveats = "".join(f"<li>{html.escape(item)}</li>" for item in sample.get("caveats", []))
     document = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{html.escape(spec.get('study_title') or 'Study design report')}</title>
@@ -794,6 +856,7 @@ main{{max-width:1180px;margin:0 auto;padding:28px 24px 60px}} h2{{font-size:21px
 <section class="meta"><div class="panel"><div class="label">Study design</div><strong>{html.escape(str(spec.get('study_type','Unspecified')))}</strong></div><div class="panel"><div class="label">Guideline</div><strong>{html.escape(infer_guideline(spec.get('study_type')))}</strong></div><div class="panel"><div class="label">Time zero</div><strong>{html.escape(str(spec.get('time_zero','Not specified')))}</strong></div><div class="panel"><div class="label">Target categories</div><strong>{html.escape('; '.join(categories))}</strong></div></section>
 <h2>{html.escape(output_table_name(spec))}</h2>{html_table(columns, rows)}<p class="fine">The characteristics object, denominator rules, balance metrics, and inferential columns are selected from the confirmed study design.</p>
 <h2>Enrollment and analysis flow</h2><ol class="flow">{steps}</ol>
+<h2>Sample size estimation</h2>{sample_html}<div class="panel"><strong>Interpretation caveats</strong><ul>{sample_caveats}</ul></div>
 <h2>Journal scope fit</h2><div class="table-wrap"><table><thead><tr><th>Journal</th><th>WoS category</th><th>2025 IF</th><th>Scope fit /10</th><th>Rationale</th></tr></thead><tbody>{journal_rows}</tbody></table></div><p class="fine">Source: user-provided JCR-70.xlsx, treated as a JCR 2026 reference set with a 2025 impact-factor column. Scope-fit scores are not acceptance probabilities and do not substitute for current author-instruction checks.</p>
 <h2>JCR top-journal benchmark</h2><p><strong>Benchmark family:</strong> {html.escape(benchmark_family)}</p><div class="scores"><div class="panel"><div class="label">Current score</div><div class="big">{total:.1f}/10</div></div><div class="panel"><div class="label">Post-revision ceiling</div><div class="big">{ceiling:.1f}/10</div></div></div><div class="table-wrap"><table><thead><tr><th>Domain</th><th>Score</th></tr></thead><tbody>{domain_rows}</tbody></table></div>
 <div class="meta"><div class="panel warning"><strong>Critical blockers</strong><ul>{blocker_html}</ul></div><div class="panel"><strong>Revision priorities</strong><ol>{priority_html}</ol></div></div>

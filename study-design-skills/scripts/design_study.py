@@ -9,6 +9,8 @@ import argparse
 import json
 from pathlib import Path
 
+from sample_size import estimate_sample_size, markdown_sample_size
+
 
 GUIDELINES = {
     "controlled interrupted time series": "SQUIRE 2.0 plus TREND; RECORD for routine data; DECIDE-AI for early live AI evaluation",
@@ -403,6 +405,11 @@ def score_study_design(spec):
         stats += 0.5
     if spec.get("bias_tools"):
         stats += 0.2
+    sample_size_result = estimate_sample_size(spec)
+    if sample_size_result["status"] == "estimated":
+        stats += 0.2
+    else:
+        stats -= 0.3
     stats = min(stats, 2.0)
 
     guideline = 0.45
@@ -455,6 +462,8 @@ def score_study_design(spec):
         blockers.append("Design-specific robustness or sensitivity plan is absent or underspecified.")
     if is_prediction and not (spec.get("validation") or spec.get("external_validation")):
         blockers.append("Prediction design lacks a clear internal/external validation strategy.")
+    if sample_size_result["status"] != "estimated":
+        blockers.append("Sample size is not estimable because design-specific assumptions are missing or unsupported.")
 
     scores = {
         "Research question and design fit": (round(design, 1), 2.0),
@@ -485,6 +494,8 @@ def score_study_design(spec):
             cap = min(cap, 7.0)
         elif "validation strategy" in blocker:
             cap = min(cap, 6.5)
+        elif "Sample size" in blocker:
+            cap = min(cap, 7.5)
     total = min(total, cap)
 
     if total >= 8.5:
@@ -501,6 +512,8 @@ def score_study_design(spec):
         strengths.append("Balance display favors SMDs and avoids baseline p-value dependence.")
     if sensitivity:
         strengths.append("Sensitivity analyses are prespecified.")
+    if sample_size_result["status"] == "estimated":
+        strengths.append("Sample size assumptions, analyzable sample, and inflated recruitment target are explicit.")
     if is_ai_workflow and spec.get("ai_intervention") and spec.get("workflow_stage"):
         strengths.append("AI workflow role and clinical workflow stage are explicit.")
 
@@ -628,6 +641,8 @@ def render(spec):
         "## Flowchart Skeleton",
         "",
         render_flowchart(spec),
+        "",
+        markdown_sample_size(estimate_sample_size(spec)),
         "",
         "## Design-Specific Bias Control And Grouping Plan",
         "",

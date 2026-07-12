@@ -113,20 +113,26 @@ Use this skill for requests such as:
    - For AI healthcare workflow studies, include alert-threshold sensitivity, workflow adoption sensitivity, clinician override analysis, subgroup/fairness checks, pre-post secular-trend checks, interrupted time-series or stepped-wedge robustness when applicable, and safety monitoring for automation bias.
    - Do not require the same sensitivity-analysis checklist for every design. Prediction studies primarily need optimism correction and internal/external validation; RCTs need estimand, missing-outcome, adherence and harms analyses; diagnostic studies need threshold, verification, reader/device and reference-standard checks.
 
-11. Apply target journal style.
+11. Estimate sample size from the confirmed primary estimand.
+   - Load `references/sample-size-estimation.md` and define the primary endpoint, effect or precision target, alpha, power/confidence width, allocation or pairing structure, clustering, and loss/incomplete-pair allowance.
+   - Use `sample_size.method` with a supported first-pass method when assumptions are available; otherwise emit an assumptions-required blocker rather than inventing a number.
+   - Report analyzable sample and recruitment target separately, expose the formula and every assumption, and require simulation or specialist software for complex clustered, multireader, lesion-level, adaptive, noninferiority, prediction-model, or repeated-measure designs.
+   - Tie secondary endpoints to feasibility or precision checks, but do not inflate the primary sample mechanically for every secondary objective.
+
+12. Apply target journal style.
    - Load `references/journal-style-profiles.md` when a journal, family, or high-impact style is specified.
    - Favor dense, transparent, footnote-rich clinical style for JAMA, Lancet, NEJM, Circulation, JCO, and Radiology.
    - Favor compact, minimal, supplement-aware style for Nature, Cell, and Science-family articles.
    - Keep top-level headings concise and make units, transformations, and denominators visible.
 
-12. Produce the scoring report after generating the design artifacts.
+13. Produce the scoring report after generating the design artifacts.
    - Load `references/benchmark-scoring.md` before finalizing any generated study design package.
    - Score against a 10-point JCR Top-1 medicine benchmark unless the user specifies a specialty benchmark, such as top oncology, radiology, cardiology, digital health, or clinical informatics journal.
    - Treat the benchmark as an editorial and methodological standard, not a promise of publication probability.
    - Provide total score, domain scores, major strengths, critical blockers, fix priorities, and an estimated post-revision ceiling.
    - Make the scoring report explicitly evaluate design-plan fit, enrollment/flowchart transparency, Table 1 adequacy, statistical/sensitivity-analysis rigor, reporting-guideline compliance, and target-journal style match.
 
-13. Produce one output or a synchronized package.
+14. Produce one output or a synchronized package.
    - Table design memo: study type, guideline, column logic, variable blocks, statistics, inferential choices, missingness policy, footnotes.
    - Flowchart specification: nodes, transitions, denominators, exclusion reasons, bias warnings, and Mermaid or manuscript-ready diagram text.
    - Study design blueprint: clinical workflow, AI intervention, comparator, unit of allocation/analysis, time anchor, endpoints, safety outcomes, adoption metrics, and reporting guideline.
@@ -137,14 +143,14 @@ Use this skill for requests such as:
    - Benchmark scoring report: 10-point JCR Top-1 medicine score, subdomain scores, evidence-based rationale, and revision priorities.
    - Data deliverables: UTF-8 CSV Table 1, formatted XLSX workbook, self-contained HTML report, and Markdown memo generated from the same table rows and journal-fit results.
 
-14. Prefer real files over Markdown-only output when the user requests a deliverable.
+15. Prefer real files over Markdown-only output when the user requests a deliverable.
    - With patient-level CSV/XLSX data, compute Table 1 using `scripts/generate_study_package.py` or `scripts/design_study.py --out-dir`.
    - Without patient-level data, generate a publication-ready shell with real column headers and blank cells in CSV/XLSX/HTML.
    - Keep CSV flat and machine-readable. Put presentation, journal fit, benchmark scoring, provenance, and warnings in XLSX/HTML.
    - Generate HTML as a self-contained report that shows Table 1, cohort flow, journal scope-fit recommendations, domain benchmark scores, blockers, and revision priorities.
    - Keep all formats numerically synchronized; do not separately reconstruct Table 1 values for each format.
 
-15. Match journals against the supplied JCR reference set.
+16. Match journals against the supplied JCR reference set.
    - Load `references/jcr-journal-benchmark.md` and `references/jcr-2026-medicine-top69.csv`.
    - Treat the catalog as 69 journal-category records and 68 unique titles; preserve cross-category evidence and deduplicate recommendation display by title.
    - Label the metric as 2025 impact factor within the user-supplied JCR 2026 reference set.
@@ -161,6 +167,7 @@ Use this skill for requests such as:
 - `references/flowchart-design.md`: CONSORT, STROBE/RECORD, STARD/Radiology, TRIPOD+AI, and protocol flowchart logic.
 - `references/causal-design-matching.md`: DAG-based covariate selection, PSM/weighting/matching algorithms, transparency requirements, and bias warnings.
 - `references/sensitivity-analyses.md`: multiple imputation, complete-case comparisons, E-values, model robustness, diagnostic/radiology sensitivity checks, and prediction-model validation.
+- `references/sample-size-estimation.md`: estimand-linked assumptions, supported first-pass formulas, diagnostic/RCT caveats, and reporting contract.
 - `references/design-specific-playbooks.md`: RWE, diagnostic accuracy, prediction/survival, medical AI, and RCT branch playbooks that connect Table 1, flowchart, grouping, and sensitivity analyses.
 - `references/ai-healthcare-icaml.md`: ICAML-style AI healthcare study design guidance for quality improvement, workflow optimization, triage, CDSS, AI-assisted diagnosis, adoption, safety, and implementation evaluation.
 - `references/benchmark-scoring.md`: 10-point JCR Top-1 medicine benchmark rubric for scoring study design, enrollment/flowchart, Table 1, plans, and target-journal fit.
