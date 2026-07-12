@@ -544,6 +544,18 @@ def flow_steps(spec):
         secondary = spec.get("secondary_objectives") or ["Secondary effectiveness, diagnostic, safety, and follow-up analyses"]
         if isinstance(secondary, str):
             secondary = [secondary]
+        crossover = "crossover" in text_norm(spec.get("study_title")) or "within the same" in text_norm(spec.get("comparator"))
+        if crossover:
+            return [
+                node("Eligible nursing technologists and CT examinations", "source_population"),
+                node("Technologists randomized to AB or BA device sequence", "randomized"),
+                node("Period 1 device assignment; transition/training separated", "period_1"),
+                node("Crossover to alternate device for Period 2", "period_2"),
+                node("Image quality, scan success, repeats, workflow and harms ascertained", "outcomes_complete"),
+                node(f"Primary mixed-effects ITT analysis: {primary}", "primary_analysis"),
+                node("Period, sequence, learning and carryover sensitivity analyses", "sensitivity_analysis"),
+                node("Secondary analysis sets: " + "; ".join(str(item) for item in secondary), "secondary_analysis"),
+            ]
         return [
             node("Source population assessed for eligibility", "source_population"),
             node("Eligible and consented before randomization", "eligible_at_time_zero"),
@@ -644,14 +656,17 @@ def write_xlsx(path, spec, columns, rows, journals, categories, scoring):
     title = spec.get("study_title") or output_table_name(spec)
     table_sheet.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(columns))
     table_sheet.cell(1, 1, title)
-    table_sheet.cell(1, 1).font = Font(name="Arial", size=14, bold=True, color=white)
+    title_size = 11 if len(title) > 105 else 12 if len(title) > 75 else 14
+    table_sheet.cell(1, 1).font = Font(name="Arial", size=title_size, bold=True, color=white)
     table_sheet.cell(1, 1).fill = PatternFill("solid", fgColor=dark)
-    table_sheet.cell(1, 1).alignment = Alignment(vertical="center")
-    table_sheet.row_dimensions[1].height = 28
+    table_sheet.cell(1, 1).alignment = Alignment(vertical="center", wrap_text=True)
+    table_sheet.row_dimensions[1].height = 42 if len(title) > 75 else 28
     table_sheet.merge_cells(start_row=2, start_column=1, end_row=2, end_column=len(columns))
     subtitle = f"{spec.get('study_type', 'Study')} | {infer_guideline(spec.get('study_type'))}"
     table_sheet.cell(2, 1, subtitle)
     table_sheet.cell(2, 1).font = Font(name="Arial", size=9, color=gray)
+    table_sheet.cell(2, 1).alignment = Alignment(vertical="center", wrap_text=True)
+    table_sheet.row_dimensions[2].height = 28 if len(subtitle) > 90 else 20
     for col_index, column in enumerate(columns, start=1):
         cell = table_sheet.cell(4, col_index, column)
         cell.font = Font(name="Arial", size=10, bold=True, color=white)

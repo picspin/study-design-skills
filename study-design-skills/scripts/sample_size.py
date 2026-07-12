@@ -167,6 +167,22 @@ def estimate_sample_size(spec):
             ],
             "caveats": ["Use simulation under the planned fixed-effects/event-study or segmented count model. Report power across plausible pre-trend, overdispersion, and partial-control scenarios."],
         }
+    if method == "cluster_crossover_simulation":
+        return {
+            "status": "assumptions_required",
+            "method": method,
+            "missing": [
+                "number of nursing technologists/clusters",
+                "AB/BA periods and encounters per technologist-period",
+                "baseline primary-outcome rate and clinically meaningful improvement",
+                "within-technologist and within-period intracluster correlations",
+                "between-technologist heterogeneity and period effect",
+                "anticipated carryover/learning and transition-window handling",
+                "device downtime, missing outcome and protocol-deviation rates",
+                "alpha, power, multiplicity and analysis-model specification",
+            ],
+            "caveats": ["Use simulation under the planned mixed-effects crossover model. Vary cluster size, ICC, period effect, carryover and patient case-mix imbalance."],
+        }
     if method not in METHODS:
         return {"status": "unsupported", "method": method, "missing": ["A supported method or an externally validated calculation"], "caveats": ["Use dedicated software or simulation and store its assumptions/results in the specification."]}
     try:

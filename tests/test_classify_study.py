@@ -217,6 +217,27 @@ class StudyTriageTests(unittest.TestCase):
             journal_sheet = workbook["Journal Fit"]
             self.assertEqual(journal_sheet["A5"].value, "RADIOLOGY")
 
+    def test_crossover_trial_uses_sequence_flow(self):
+        root = Path(__file__).parents[1]
+        spec = {
+            "study_title": "Randomized technologist crossover study",
+            "study_type": "Randomized controlled trial",
+            "comparator": "Two devices within the same technologists",
+            "groups": [{"label": "AB"}, {"label": "BA"}],
+            "variables": [{"name": "experience", "label": "Experience", "type": "continuous"}],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            spec_path = Path(temp_dir) / "spec.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            result = subprocess.run(
+                ["python3", str(root / "study-design-skills/scripts/design_study.py"), str(spec_path)],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            self.assertIn("Technologists randomized to AB or BA device sequence", result.stdout)
+            self.assertNotIn("Allocated to intervention", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -148,6 +148,7 @@ def render_flowchart(spec):
     if spec.get("flowchart") is False:
         return ""
     study_type = normalize(spec.get("study_type", ""))
+    title_and_comparator = normalize(f"{spec.get('study_title', '')} {spec.get('comparator', '')}")
     if "controlled interrupted time series" in study_type or "cits" in study_type:
         return """```mermaid
 flowchart TD
@@ -169,6 +170,16 @@ flowchart TD
   F --> G["Segmented regression or panel/event-study analysis"]
 ```"""
     if any(term in study_type for term in ["rct", "randomized", "clinical trial"]):
+        if "crossover" in title_and_comparator or "within the same" in title_and_comparator:
+            return """```mermaid
+flowchart TD
+  A["Eligible nursing technologists and cardiovascular CT examinations"] --> B["Technologists randomized to AB or BA device sequence"]
+  B --> C["Period 1 assigned device; training/transition separated"]
+  C --> D["Crossover to alternate device for Period 2"]
+  D --> E["Image quality, scan success, repeats, workflow and harms ascertained"]
+  E --> F["Primary mixed-effects ITT analysis by randomized sequence and period"]
+  F --> G["Period, sequence, learning and carryover sensitivity analyses"]
+```"""
         return """```mermaid
 flowchart TD
   A["Assessed for eligibility (n=)"] --> B["Excluded (n=): not meeting criteria; declined; other"]
