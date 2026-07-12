@@ -227,6 +227,17 @@ def norm(value):
     return re.sub(r"\s+", " ", str(value or "").strip().lower())
 
 
+def has_ai_intent(text):
+    """Detect an actual AI-healthcare intent without matching words like 'paired'."""
+    normalized = norm(text)
+    explicit_terms = [
+        "llm", "large language model", "artificial intelligence", "machine learning",
+        "deep learning", "智能体", "人工智能", "机器学习", "深度学习", "ai系统",
+        "ai-assisted", "ai-enabled", "ai-driven",
+    ]
+    return any(term in normalized for term in explicit_terms) or bool(re.search(r"\bai\b", normalized))
+
+
 def inferred_answers(spec):
     proposal = norm(spec.get("proposal") or spec.get("research_question") or spec.get("title"))
     inferred = {}
@@ -272,7 +283,7 @@ def classify(spec):
         add(scores, "interrupted_time_series", 2.0, "proposal describes a workflow or quality intervention")
         add(scores, "controlled_interrupted_time_series", 2.0, "proposal describes a workflow or quality intervention")
         add(scores, "difference_in_differences", 1.0, "implementation effect may require a concurrent comparison")
-    if any(term in proposal for term in ["llm", "智能体", "artificial intelligence", " ai ", "ai系统"]):
+    if has_ai_intent(proposal):
         add(scores, "interrupted_time_series", 0.5, "AI deployment is an intervention event")
         add(scores, "controlled_interrupted_time_series", 0.5, "AI deployment is an intervention event")
     if any(term in proposal for term in ["准确性", "accuracy", "敏感度", "特异度", "reference standard", "参考标准"]):
@@ -397,7 +408,7 @@ def guideline_overlays(spec, design_id):
         overlays.append("TREND")
     if answers.get("data_source") in {"retrospective_ehr", "registry_claims", "mixed_prospective_routine"}:
         overlays.append("RECORD")
-    if design_id not in {"systematic_review_meta_analysis", "systematic_review_narrative", "scoping_review"} and any(term in proposal for term in ["llm", "智能体", "ai", "decision support", "cdss"]):
+    if design_id not in {"systematic_review_meta_analysis", "systematic_review_narrative", "scoping_review"} and (has_ai_intent(proposal) or any(term in proposal for term in ["decision support", "cdss"])):
         overlays.append("DECIDE-AI when this is an early-stage live clinical AI evaluation")
     return list(dict.fromkeys(overlays))
 

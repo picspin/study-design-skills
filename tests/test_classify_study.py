@@ -13,6 +13,23 @@ SPEC.loader.exec_module(MODULE)
 
 
 class StudyTriageTests(unittest.TestCase):
+    def test_paired_imaging_does_not_trigger_ai_overlay(self):
+        spec = {
+            "proposal": "Prospective paired comparative imaging study with randomized order",
+            "confirmed_design": "comparative_diagnostic_accuracy",
+            "answers": {
+                "primary_aim": "diagnostic_accuracy",
+                "diagnostic_comparison": "paired",
+                "data_source": "prospective_primary",
+                "primary_outcome_family": "accuracy",
+                "analysis_unit": "patient",
+            },
+        }
+
+        result = MODULE.triage(spec)
+
+        self.assertFalse(any("DECIDE-AI" in item for item in result["guideline_overlays"]))
+
     def test_asks_one_question_first(self):
         result = MODULE.triage({"proposal": "引入LLM智能体质控和监测预警系统，与传统工作流比较不良事件"})
         self.assertEqual(result["stage"], "clarify")
@@ -141,6 +158,30 @@ class StudyTriageTests(unittest.TestCase):
             self.assertEqual(workbook.sheetnames[0], "Study Characteristics")
             header = next(Path(temp_dir).glob("*-table1.csv")).read_text(encoding="utf-8-sig").splitlines()[0]
             self.assertIn("Study,Year,Country/setting,Design", header)
+
+    def test_exact_journal_target_outranks_non_ai_specialty_derivative(self):
+        root = Path(__file__).parents[1]
+        spec = {
+            "study_title": "Paired MRI comparison",
+            "study_type": "Comparative diagnostic accuracy study",
+            "journal": "RADIOLOGY",
+            "target_jcr_category": "RADIOLOGY, NUCLEAR MEDICINE & MEDICAL IMAGING",
+            "groups": [{"label": "Sequence A"}, {"label": "Sequence B"}],
+            "variables": [{"name": "age", "label": "Age", "type": "continuous"}],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            spec_path = Path(temp_dir) / "spec.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            subprocess.run(
+                ["python3", str(root / "study-design-skills/scripts/design_study.py"), str(spec_path), "--out-dir", temp_dir, "--formats", "xlsx"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            from openpyxl import load_workbook
+            workbook = load_workbook(next(Path(temp_dir).glob("*-package.xlsx")), read_only=True)
+            journal_sheet = workbook["Journal Fit"]
+            self.assertEqual(journal_sheet["A5"].value, "RADIOLOGY")
 
 
 if __name__ == "__main__":

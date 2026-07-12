@@ -427,12 +427,18 @@ def journal_recommendations(spec, catalog, limit=8):
         elif category in {GENERAL_MEDICINE, EXPERIMENTAL_MEDICINE}:
             score += 2.2
             reasons.append("broad medicine scope")
-        if requested and requested in name.casefold():
+        if requested and requested == name.casefold():
             score += 2.0
             reasons.append("requested target journal")
+        elif requested and requested in name.casefold():
+            score += 0.4
+            reasons.append("related journal-family title")
         if is_ai and any(token in name.casefold() for token in ["digital", "artificial intelligence", "image analysis"]):
             score += 1.5
             reasons.append("AI/digital-health fit")
+        elif not is_ai and any(token in name.casefold() for token in ["artificial intelligence", "image analysis"]):
+            score -= 1.5
+            reasons.append("specialized AI/methods scope mismatch")
         if is_clinical and category in categories:
             score += 0.7
             reasons.append("clinical-design readership")
