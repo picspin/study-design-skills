@@ -3,6 +3,7 @@
 __pycache__/
 *.py[cod]
 outputs/
+.codebase-memory/
 *.xlsx
 *.xls
 *.html

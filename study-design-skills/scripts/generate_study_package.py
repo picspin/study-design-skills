@@ -21,6 +21,7 @@ from design_study import (
     infer_design_warnings,
     infer_guideline,
     render,
+    render_footnote,
     score_study_design,
 )
 
@@ -59,6 +60,39 @@ EXPERIMENTAL_MEDICINE = "MEDICINE, RESEARCH & EXPERIMENTAL"
 
 def text_norm(value):
     return str(value or "").strip().casefold()
+
+
+def include_smd(spec):
+    if "include_smd" in spec:
+        return bool(spec["include_smd"])
+    study = text_norm(spec.get("study_type"))
+    return any(term in study for term in ["observational causal", "comparative effectiveness", "target trial", "real-world evidence", "rwe"])
+
+
+def output_table_name(spec):
+    study = text_norm(spec.get("study_type"))
+    if any(term in study for term in ["systematic review", "meta-analysis"]):
+        return "Study Characteristics"
+    if "qualitative" in study:
+        return "Participant Context"
+    return "Table 1"
+
+
+def p_value_note(spec):
+    study = text_norm(spec.get("study_type"))
+    if any(term in study for term in ["rct", "randomized", "stepped-wedge"]):
+        return "Omitted; baseline significance testing does not validate randomization"
+    if any(term in study for term in ["prediction", "prognostic"]):
+        return "Omitted; emphasize events, calibration, discrimination, and validation"
+    if any(term in study for term in ["diagnostic", "radiology", "imaging"]):
+        return "Omitted from characteristics; accuracy comparisons require paired/design-specific inference"
+    if any(term in study for term in ["interrupted time series", "difference-in-differences", "difference in differences"]):
+        return "Omitted from characteristics; inference belongs to segmented/panel models"
+    if any(term in study for term in ["systematic review", "meta-analysis", "scoping review"]):
+        return "Not applicable to the study-characteristics table"
+    if include_smd(spec):
+        return "Omitted; use SMD for causal observational balance"
+    return "Included only when a prespecified descriptive comparison requires it" if spec.get("include_p_values") else "Omitted by default"
 
 
 def safe_slug(value):
@@ -255,7 +289,7 @@ def table_columns(spec, data, groups):
         n = len(data) if data is not None else spec.get("overall_n", "")
         columns.append(f"Overall (n={n})")
     columns.extend([f"{group['label']} (n={group['n']})" for group in groups])
-    if spec.get("include_smd", True):
+    if include_smd(spec):
         columns.append("SMD")
     if spec.get("include_p_values", False):
         columns.append("P value")
@@ -263,6 +297,18 @@ def table_columns(spec, data, groups):
 
 
 def build_table(spec, data, groups, variables):
+    study = text_norm(spec.get("study_type"))
+    if data is None and any(term in study for term in ["systematic review", "meta-analysis"]):
+        columns = spec.get("characteristics_columns") or [
+            "Study", "Year", "Country/setting", "Design", "Population", "N",
+            "Intervention/exposure/test/model", "Comparator", "Primary outcome",
+            "Follow-up", "Risk of bias",
+        ]
+        included = spec.get("included_studies") or []
+        rows = [{column: study_row.get(column, "") for column in columns} for study_row in included]
+        if not rows:
+            rows = [{column: "" for column in columns}]
+        return columns, rows
     columns = table_columns(spec, data, groups)
     if data is None:
         rows = []
@@ -292,7 +338,7 @@ def build_table(spec, data, groups, variables):
             for group, subset in zip(groups, subsets):
                 weights = subset[weight_column] if weight_column and weight_column in subset.columns else None
                 row[f"{group['label']} (n={group['n']})"] = format_continuous(subset[name], variable["summary"], weights)
-            if spec.get("include_smd", True) and len(subsets) >= 2:
+            if include_smd(spec) and len(subsets) >= 2:
                 smds = []
                 for left, right in combinations(subsets, 2):
                     lw = left[weight_column] if weight_column and weight_column in left.columns else None
@@ -312,7 +358,7 @@ def build_table(spec, data, groups, variables):
                     right_rate, _ = weighted_rate(right[name], level, right[weight_column] if weight_column else None)
                     if not math.isnan(left_rate) and not math.isnan(right_rate):
                         max_smd = max(max_smd, binary_smd(left_rate, right_rate))
-            row["SMD"] = format_decimal(max_smd, 3) if spec.get("include_smd", True) and len(subsets) >= 2 else ""
+            row["SMD"] = format_decimal(max_smd, 3) if include_smd(spec) and len(subsets) >= 2 else ""
             if spec.get("include_p_values", False):
                 row["P value"] = p_value(variable, data, groups, group_column)
             rows.append(row)
@@ -450,6 +496,24 @@ def flow_steps(spec):
         value = counts.get(key)
         return f"{label} (n={value})" if value is not None else f"{label} (n not supplied)"
 
+    if "controlled interrupted time series" in study or "cits" in study:
+        return [
+            node("Intervention and concurrent control source streams", "source_population"),
+            node("Common eligibility and stable outcome definition", "eligible_at_time_zero"),
+            node("Repeated pre-intervention observations by series", "pre_time_points"),
+            node("Deployment date and ramp-up period", "intervention_point"),
+            node("Repeated post-intervention observations by series", "post_time_points"),
+            node("Controlled segmented-regression analysis", "primary_analysis"),
+        ]
+    if any(term in study for term in ["interrupted time series", "difference-in-differences", "difference in differences"]):
+        return [
+            node("Clinical/site stream and sampling frame", "source_population"),
+            node("Stable eligibility and outcome definition", "eligible_at_time_zero"),
+            node("Repeated pre-intervention observations", "pre_time_points"),
+            node("Deployment/rollout and transition period", "intervention_point"),
+            node("Repeated post-intervention observations", "post_time_points"),
+            node("Segmented-regression or event-study analysis", "primary_analysis"),
+        ]
     if any(term in study for term in ["observational", "cohort", "rwe", "real-world"]):
         return [
             node("Source population/data repository", "source_population"),
@@ -468,6 +532,16 @@ def flow_steps(spec):
         return ["Assessed for eligibility", "Index test", "Reference standard", "Disease present/absent", "Indeterminate or missing tests", "Accuracy analysis"]
     if any(term in study for term in ["ai", "cdss", "triage", "workflow"]):
         return ["Eligible encounters", "AI trigger", "Output generated", "Shown to clinician", "Accepted/modified/overridden", "Downstream action", "Safety and outcome ascertainment"]
+    if any(term in study for term in ["systematic review", "meta-analysis"]):
+        return [
+            node("Records identified", "records_identified"),
+            node("Duplicates removed", "records_deduplicated"),
+            node("Titles/abstracts screened", "records_screened"),
+            node("Full texts assessed", "full_texts"),
+            node("Full texts excluded with reasons", "full_texts_excluded"),
+            node("Studies included in qualitative synthesis", "included_studies"),
+            node("Studies included in each meta-analysis", "meta_analysis_studies"),
+        ]
     return ["Source population", "Eligibility", "Study groups", "Follow-up", "Final analysis"]
 
 
@@ -512,7 +586,7 @@ def write_csv(path, columns, rows):
 def write_xlsx(path, spec, columns, rows, journals, categories, scoring):
     workbook = Workbook()
     table_sheet = workbook.active
-    table_sheet.title = "Table 1"
+    table_sheet.title = output_table_name(spec)
     journal_sheet = workbook.create_sheet("Journal Fit")
     score_sheet = workbook.create_sheet("Benchmark")
     notes_sheet = workbook.create_sheet("Methods Notes")
@@ -525,7 +599,7 @@ def write_xlsx(path, spec, columns, rows, journals, categories, scoring):
     gray = "65747C"
     thin = Side(style="thin", color="D8E0E4")
 
-    title = spec.get("study_title") or "Table 1. Baseline Characteristics of the Study Population"
+    title = spec.get("study_title") or output_table_name(spec)
     table_sheet.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(columns))
     table_sheet.cell(1, 1, title)
     table_sheet.cell(1, 1).font = Font(name="Arial", size=14, bold=True, color=white)
@@ -542,8 +616,9 @@ def write_xlsx(path, spec, columns, rows, journals, categories, scoring):
         cell.fill = PatternFill("solid", fgColor=accent)
         cell.alignment = Alignment(horizontal="left" if col_index == 1 else "center", vertical="center", wrap_text=True)
         cell.border = Border(bottom=Side(style="medium", color=accent))
+    first_column = columns[0]
     for row_index, row in enumerate(rows, start=5):
-        is_level = str(row["Characteristic"]).startswith("  ")
+        is_level = str(row.get(first_column, "")).startswith("  ")
         for col_index, column in enumerate(columns, start=1):
             cell = table_sheet.cell(row_index, col_index, row.get(column, ""))
             cell.font = Font(name="Arial", size=9, bold=not is_level and col_index == 1)
@@ -560,11 +635,12 @@ def write_xlsx(path, spec, columns, rows, journals, categories, scoring):
                 pass
     footnote_row = 6 + len(rows)
     table_sheet.merge_cells(start_row=footnote_row, start_column=1, end_row=footnote_row + 2, end_column=len(columns))
-    footnote = (
-        "Data are mean (SD), median (IQR), or No. (%) unless indicated. Percentages use non-missing denominators. "
-        "SMD is the maximum absolute pairwise standardized difference; for categorical variables it is the maximum binary-level SMD. "
-        "SMD <0.10 is a descriptive balance target, not proof of no confounding."
-    )
+    footnote = render_footnote(spec)
+    if include_smd(spec):
+        footnote += (
+            " SMD is the maximum absolute pairwise standardized difference; for categorical variables it is the maximum binary-level SMD."
+            " SMD <0.10 is a descriptive balance target, not proof of no confounding."
+        )
     if spec.get("weight_column"):
         footnote += f" Summaries use nonnegative weights from {spec['weight_column']}; medians remain unweighted."
     table_sheet.cell(footnote_row, 1, footnote)
@@ -615,12 +691,16 @@ def write_xlsx(path, spec, columns, rows, journals, categories, scoring):
     score_sheet.column_dimensions["D"].width = 56
 
     notes = [
+        ["Confirmed design", spec.get("confirmed_design", "Not triaged")],
         ["Study type", spec.get("study_type", "")],
         ["Guideline", infer_guideline(spec.get("study_type"))],
+        ["Guideline stack", "; ".join(spec.get("guideline_stack", []))],
+        ["Bias/appraisal tools", "; ".join(spec.get("bias_tools", []))],
+        ["Analysis/validation methods", "; ".join(spec.get("analysis_methods", []))],
         ["Time zero/index anchor", spec.get("time_zero", "Not specified")],
         ["Group column", spec.get("group_column", "Not specified")],
         ["Weight column", spec.get("weight_column", "Not used")],
-        ["P values", "Included" if spec.get("include_p_values") else "Omitted; use SMD for observational balance"],
+        ["P values", p_value_note(spec)],
         ["JCR source", "JCR-70.xlsx supplied by user; 69 records, 68 unique journal titles"],
         ["Category benchmark", " ".join(category_benchmark_requirements(categories))],
         ["Interpretation", "Journal scope-fit and benchmark scores are editorial/methodological aids, not acceptance probabilities."],
@@ -659,13 +739,14 @@ def style_sheet(sheet, columns, dark, accent, white, thin, header_row=4):
 def html_table(columns, rows):
     head = "".join(f"<th>{html.escape(str(column))}</th>" for column in columns)
     body = []
+    first_column = columns[0]
     for row in rows:
-        label = str(row["Characteristic"])
+        label = str(row.get(first_column, ""))
         level = label.startswith("  ")
         cells = []
         for column in columns:
             value = row.get(column, "")
-            class_name = "characteristic" if column == "Characteristic" else "numeric"
+            class_name = "characteristic" if column == first_column else "numeric"
             cells.append(f'<td class="{class_name}">{html.escape(str(value))}</td>')
         body.append(f'<tr class="{"level" if level else "variable"}">{"".join(cells)}</tr>')
     return f'<div class="table-wrap"><table><thead><tr>{head}</tr></thead><tbody>{"".join(body)}</tbody></table></div>'
@@ -705,12 +786,13 @@ main{{max-width:1180px;margin:0 auto;padding:28px 24px 60px}} h2{{font-size:21px
 <header><h1>{html.escape(spec.get('study_title') or 'Study Design and Table 1 Report')}</h1><p>{html.escape(spec.get('population', 'Study population'))}</p></header>
 <main>
 <section class="meta"><div class="panel"><div class="label">Study design</div><strong>{html.escape(str(spec.get('study_type','Unspecified')))}</strong></div><div class="panel"><div class="label">Guideline</div><strong>{html.escape(infer_guideline(spec.get('study_type')))}</strong></div><div class="panel"><div class="label">Time zero</div><strong>{html.escape(str(spec.get('time_zero','Not specified')))}</strong></div><div class="panel"><div class="label">Target categories</div><strong>{html.escape('; '.join(categories))}</strong></div></section>
-<h2>Table 1</h2>{html_table(columns, rows)}<p class="fine">Values are mean (SD), median (IQR), or No. (%). SMDs are descriptive; a threshold of 0.10 does not prove absence of confounding.</p>
+<h2>{html.escape(output_table_name(spec))}</h2>{html_table(columns, rows)}<p class="fine">The characteristics object, denominator rules, balance metrics, and inferential columns are selected from the confirmed study design.</p>
 <h2>Enrollment and analysis flow</h2><ol class="flow">{steps}</ol>
 <h2>Journal scope fit</h2><div class="table-wrap"><table><thead><tr><th>Journal</th><th>WoS category</th><th>2025 IF</th><th>Scope fit /10</th><th>Rationale</th></tr></thead><tbody>{journal_rows}</tbody></table></div><p class="fine">Source: user-provided JCR-70.xlsx, treated as a JCR 2026 reference set with a 2025 impact-factor column. Scope-fit scores are not acceptance probabilities and do not substitute for current author-instruction checks.</p>
 <h2>JCR top-journal benchmark</h2><p><strong>Benchmark family:</strong> {html.escape(benchmark_family)}</p><div class="scores"><div class="panel"><div class="label">Current score</div><div class="big">{total:.1f}/10</div></div><div class="panel"><div class="label">Post-revision ceiling</div><div class="big">{ceiling:.1f}/10</div></div></div><div class="table-wrap"><table><thead><tr><th>Domain</th><th>Score</th></tr></thead><tbody>{domain_rows}</tbody></table></div>
 <div class="meta"><div class="panel warning"><strong>Critical blockers</strong><ul>{blocker_html}</ul></div><div class="panel"><strong>Revision priorities</strong><ol>{priority_html}</ol></div></div>
 <h2>Category benchmark requirements</h2><div class="panel"><ul>{requirements_html}</ul></div>
+<h2>Design-specific method stack</h2><div class="meta"><div class="panel"><strong>Reporting guidelines</strong><ul>{''.join(f'<li>{html.escape(item)}</li>' for item in spec.get('guideline_stack', []))}</ul></div><div class="panel"><strong>Bias/appraisal tools</strong><ul>{''.join(f'<li>{html.escape(item)}</li>' for item in spec.get('bias_tools', []))}</ul></div><div class="panel"><strong>Analysis/validation methods</strong><ul>{''.join(f'<li>{html.escape(item)}</li>' for item in spec.get('analysis_methods', []))}</ul></div></div>
 <h2>Design warnings</h2><div class="panel warning"><ul>{warnings_html}</ul></div>
 </main></body></html>"""
     path.write_text(document, encoding="utf-8")

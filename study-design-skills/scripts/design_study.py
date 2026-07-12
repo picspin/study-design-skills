@@ -11,7 +11,12 @@ from pathlib import Path
 
 
 GUIDELINES = {
+    "controlled interrupted time series": "SQUIRE 2.0 plus TREND; RECORD for routine data; DECIDE-AI for early live AI evaluation",
+    "interrupted time series": "SQUIRE 2.0 plus TREND; RECORD for routine data; DECIDE-AI for early live AI evaluation",
+    "difference-in-differences": "TREND plus STROBE; RECORD for routine data; SQUIRE 2.0 for quality improvement",
+    "stepped-wedge": "CONSORT extension for stepped-wedge cluster randomized trials; CONSORT-AI when applicable",
     "rct": "CONSORT 2025 or applicable CONSORT extension",
+    "randomized controlled trial": "CONSORT 2025 or applicable CONSORT extension",
     "randomized trial": "CONSORT 2025 or applicable CONSORT extension",
     "clinical trial": "CONSORT 2025 or applicable CONSORT extension",
     "protocol": "SPIRIT or design-specific protocol guideline",
@@ -35,6 +40,7 @@ GUIDELINES = {
     "prediction model": "TRIPOD or TRIPOD+AI",
     "medical ai": "TRIPOD+AI, STARD-AI, CONSORT-AI, DECIDE-AI, or ICAML depending on task",
     "systematic review": "PRISMA; usually use a study-characteristics table",
+    "meta-analysis": "PRISMA; use the design-specific risk-of-bias tool",
     "economic evaluation": "CHEERS",
     "quality improvement": "SQUIRE",
     "qualitative": "SRQR or COREQ",
@@ -91,9 +97,12 @@ def infer_variables(spec):
             if isinstance(item, str):
                 rows.append({"name": item, "summary": ""})
             else:
+                label = item.get("label", item.get("name", "Variable"))
+                if item.get("unit"):
+                    label = f"{label}, {item['unit']}"
                 rows.append({
-                    "name": item.get("name", "Variable"),
-                    "summary": item.get("summary", ""),
+                    "name": label,
+                    "summary": item.get("display_suffix", ""),
                 })
         return rows
     rows = []
@@ -106,11 +115,18 @@ def infer_variables(spec):
 def infer_design_warnings(spec):
     study_type = normalize(spec.get("study_type", ""))
     warnings = []
-    if any(term in study_type for term in ["rwe", "real-world", "observational", "cohort"]):
+    is_causal_observational = any(term in study_type for term in ["causal", "comparative effectiveness", "target trial", "rwe", "real-world evidence"])
+    is_its = any(term in study_type for term in ["interrupted time series", "difference-in-differences", "difference in differences"])
+    if is_causal_observational:
         if not spec.get("time_zero"):
             warnings.append("Define time zero/index date before finalizing Table 1 or flowchart denominators.")
         warnings.append("Use DAG/clinical prior knowledge for PS covariates; exclude intermediates, colliders, post-index variables, and outcome/post-outcome variables.")
         warnings.append("Prefer SMDs over baseline p values for balance; SMD <0.1 is a common descriptive target, not proof of no confounding.")
+    elif any(term in study_type for term in ["observational", "cohort", "cross-sectional", "case-control"]):
+        warnings.append("Do not add propensity-score methods unless the study has a defined causal contrast and a defensible time zero.")
+    if is_its:
+        warnings.append("Estimate intervention-related level and slope changes with repeated observations; one pre and one post aggregate do not constitute an ITS.")
+        warnings.append("Address autocorrelation, seasonality, co-interventions, intervention timing, ramp-up, and composition changes; use a concurrent control series when available.")
     if any(term in study_type for term in ["clinical ai", "ai healthcare", "ai clinical quality", "cdss", "triage", "workflow", "quality improvement", "diagnostic efficiency", "ai-assisted diagnosis"]):
         warnings.append("Use ICAML-style workflow evaluation when the primary question is implementation, quality, triage, CDSS, or human-AI workflow impact rather than model development.")
         warnings.append("Track AI trigger, output generation, clinician visibility, acceptance/override, downstream action, safety ascertainment, adoption, and fairness strata.")
@@ -130,6 +146,26 @@ def render_flowchart(spec):
     if spec.get("flowchart") is False:
         return ""
     study_type = normalize(spec.get("study_type", ""))
+    if "controlled interrupted time series" in study_type or "cits" in study_type:
+        return """```mermaid
+flowchart TD
+  A["Intervention and concurrent control source streams"] --> B["Common eligibility and stable outcome definition"]
+  B --> C["Repeated pre-intervention observations by series"]
+  C --> D["Prespecified deployment date and ramp-up period"]
+  D --> E["Repeated post-intervention observations by series"]
+  E --> F["Complete time points with case-mix and exposure denominators"]
+  F --> G["Controlled segmented-regression analysis"]
+```"""
+    if "interrupted time series" in study_type or "difference-in-differences" in study_type or "difference in differences" in study_type:
+        return """```mermaid
+flowchart TD
+  A["Clinical/site stream and sampling frame"] --> B["Stable eligibility and outcome definition"]
+  B --> C["Repeated pre-intervention observations"]
+  C --> D["Deployment/rollout and prespecified transition period"]
+  D --> E["Repeated post-intervention observations"]
+  E --> F["Time points retained/excluded with reasons"]
+  F --> G["Segmented regression or panel/event-study analysis"]
+```"""
     if any(term in study_type for term in ["rct", "randomized", "clinical trial"]):
         return """```mermaid
 flowchart TD
@@ -180,6 +216,16 @@ flowchart TD
   E --> I["Included in accuracy analysis (n=)"]
   F --> I
 ```"""
+    if any(term in study_type for term in ["systematic review", "meta-analysis"]):
+        return """```mermaid
+flowchart TD
+  A["Records identified from databases/registers"] --> B["Duplicates removed"]
+  B --> C["Titles/abstracts screened"]
+  C --> D["Full texts assessed"]
+  D --> E["Excluded with reasons"]
+  D --> F["Studies included in qualitative synthesis"]
+  F --> G["Studies included in each meta-analysis"]
+```"""
     return """```mermaid
 flowchart TD
   A["Source data/population (n=)"] --> B["Potentially eligible participants (n=)"]
@@ -195,11 +241,31 @@ flowchart TD
 
 
 def render_matching(spec):
+    study_type = normalize(spec.get("study_type", ""))
+    if any(term in study_type for term in ["prediction", "prognostic"]):
+        return [
+            "- Propensity-score matching is not a default prediction-model bias correction.",
+            "- Use bootstrap/repeated resampling for optimism, shrinkage or penalization, calibration, discrimination, clinical utility, and temporal/geographic/site external validation.",
+        ]
+    if any(term in study_type for term in ["diagnostic", "radiology", "imaging"]):
+        return [
+            "- Do not use PSM as a substitute for representative one-gate sampling or verification-bias control.",
+            "- Prefer consecutive/random enrollment, blinded index/reference interpretation, complete verification, prespecified thresholds, and paired/randomized comparison for multiple tests.",
+        ]
+    if any(term in study_type for term in ["interrupted time series", "difference-in-differences", "difference in differences"]):
+        return [
+            "- PSM is not the primary design control. Preserve repeated time points and intervention timing.",
+            "- Use segmented regression or panel/event-study models with autocorrelation/seasonality, baseline trends, concurrent controls, cluster inference, and co-intervention checks as applicable.",
+        ]
+    if any(term in study_type for term in ["rct", "randomized", "stepped-wedge"]):
+        return ["- Use randomized allocation, concealment, prespecified estimand, intention-to-treat analysis, and cluster/period effects when applicable; do not replace randomization with PSM."]
+    if any(term in study_type for term in ["systematic review", "meta-analysis"]):
+        return ["- Not applicable as a participant-grouping method. Use design-specific risk-of-bias tools and a prespecified evidence-synthesis model."]
     matching = spec.get("matching")
     if not matching:
         return [
-            "- State whether matching/weighting is planned.",
-            "- If planned, report algorithm, covariates, caliper/ratio/replacement, common support, discarded records, and post-design balance.",
+            "- State the causal estimand before deciding whether matching/weighting is needed.",
+            "- If no causal group contrast is intended, explain the design-specific bias controls instead of adding propensity-score methods.",
         ]
     if isinstance(matching, str):
         return [f"- Planned method: {matching}"]
@@ -213,6 +279,7 @@ def render_missing_and_sensitivity(spec):
     lines = []
     missing = spec.get("missing_data")
     sensitivity = spec.get("sensitivity_analyses")
+    study_type = normalize(spec.get("study_type", ""))
     if missing:
         if isinstance(missing, str):
             lines.append(f"- Missing-data plan: {missing}")
@@ -220,15 +287,37 @@ def render_missing_and_sensitivity(spec):
             for key, value in missing.items():
                 lines.append(f"- Missing-data {key}: {value}")
     else:
-        lines.append("- Describe missingness by variable and group; use MI when material missingness makes complete-case analysis fragile.")
+        lines.append("- Describe missingness and use a design-appropriate strategy; multiple imputation is not automatically required for every design.")
     if sensitivity:
         if isinstance(sensitivity, list):
             lines.extend([f"- Sensitivity: {item}" for item in sensitivity])
         else:
             lines.append(f"- Sensitivity: {sensitivity}")
     else:
-        lines.append("- Compare MI versus complete-case/non-imputed results when MI is used.")
-        lines.append("- Consider alternative matching/weighting, covariate sets, trimming, negative controls, E-values, or model forms when design-sensitive.")
+        if any(term in study_type for term in ["prediction", "prognostic"]):
+            lines.extend([
+                "- Internal validation: bootstrap or repeated resampling; quantify optimism and calibration.",
+                "- External validation: temporal, geographic, or site-based data; report discrimination, calibration, and clinical utility.",
+            ])
+        elif any(term in study_type for term in ["interrupted time series", "difference-in-differences", "difference in differences"]):
+            lines.extend([
+                "- Check alternative intervention dates, ramp-up exclusion, autocorrelation/seasonality structures, pre-trends, co-interventions, and unaffected outcomes/series.",
+                "- Compare controlled and uncontrolled estimates when a concurrent control is available.",
+            ])
+        elif any(term in study_type for term in ["diagnostic", "radiology", "imaging"]):
+            lines.extend([
+                "- Assess indeterminate results, missing reference standards, threshold choice, reader/order effects, and device/site variation.",
+                "- For comparative accuracy, preserve paired data and apply QUADAS-C alongside QUADAS-3 in appraisal contexts.",
+            ])
+        elif any(term in study_type for term in ["rct", "randomized", "stepped-wedge"]):
+            lines.extend(["- Address missing outcomes, protocol deviations, estimand strategy, clustering/period effects, and harms; do not require observational unmeasured-confounding metrics by reflex."])
+        elif any(term in study_type for term in ["systematic review", "meta-analysis"]):
+            lines.extend(["- Assess design-specific risk of bias, heterogeneity, influential studies, small-study effects when interpretable, and certainty of evidence."])
+        else:
+            lines.extend([
+                "- Compare MI versus complete-case/non-imputed results only when MI is used and the assumptions are relevant.",
+                "- Select robustness analyses that target the actual design threats rather than a fixed checklist.",
+            ])
     return lines
 
 
@@ -240,7 +329,8 @@ def score_study_design(spec):
     if isinstance(notes, str):
         notes = [notes]
 
-    is_rwe = any(term in study_type for term in ["rwe", "real-world", "observational", "cohort"])
+    is_rwe = any(term in study_type for term in ["rwe", "real-world evidence", "comparative effectiveness", "target trial", "observational causal"])
+    is_its = any(term in study_type for term in ["interrupted time series", "difference-in-differences", "difference in differences"])
     is_ai_workflow = any(term in study_type for term in [
         "icaml", "clinical ai", "ai healthcare", "ai clinical quality", "cdss",
         "triage", "workflow", "quality improvement", "diagnostic efficiency",
@@ -253,6 +343,8 @@ def score_study_design(spec):
     design = 0.8
     if spec.get("study_type"):
         design += 0.3
+    if spec.get("confirmed_design"):
+        design += 0.2
     if groups or spec.get("comparator"):
         design += 0.3
     if spec.get("time_zero"):
@@ -270,6 +362,8 @@ def score_study_design(spec):
         flow += 0.2
     if is_ai_workflow and spec.get("workflow_stage"):
         flow += 0.2
+    if spec.get("flow_guidance"):
+        flow += 0.1
     flow = min(flow, 1.5)
 
     table = 0.4
@@ -281,10 +375,14 @@ def score_study_design(spec):
         table += 0.2
     if spec.get("overall_n") or groups:
         table += 0.2
+    if spec.get("table1_guidance"):
+        table += 0.3
+    if any(term in study_type for term in ["systematic review", "meta-analysis", "scoping review"]):
+        table = max(table, 1.0)
     table = min(table, 1.5)
 
     stats = 0.4
-    if spec.get("matching"):
+    if is_rwe and spec.get("matching"):
         stats += 0.35
     if spec.get("missing_data"):
         stats += 0.35
@@ -295,6 +393,16 @@ def score_study_design(spec):
         stats += 0.2
     if is_ai_workflow and spec.get("comparator"):
         stats += 0.2
+    if is_its and spec.get("time_points"):
+        stats += 0.35
+    if is_prediction and (spec.get("validation") or spec.get("external_validation")):
+        stats += 0.5
+    if is_diagnostic and spec.get("reference_standard"):
+        stats += 0.35
+    if spec.get("analysis_methods"):
+        stats += 0.5
+    if spec.get("bias_tools"):
+        stats += 0.2
     stats = min(stats, 2.0)
 
     guideline = 0.45
@@ -304,6 +412,8 @@ def score_study_design(spec):
         guideline += 0.15
     if spec.get("benchmark") or spec.get("journal"):
         guideline += 0.15
+    if spec.get("guideline_stack"):
+        guideline += 0.2
     guideline = min(guideline, 1.0)
 
     journal_fit = 0.35
@@ -341,8 +451,10 @@ def score_study_design(spec):
         blockers.append("Prediction/survival design should report event counts and validation logic.")
     if is_rct and spec.get("include_p_values"):
         blockers.append("RCT Table 1 includes baseline p values; top journals usually discourage this.")
-    if not sensitivity:
-        blockers.append("Sensitivity-analysis plan is absent or underspecified.")
+    if (is_rwe or is_its or is_diagnostic) and not sensitivity:
+        blockers.append("Design-specific robustness or sensitivity plan is absent or underspecified.")
+    if is_prediction and not (spec.get("validation") or spec.get("external_validation")):
+        blockers.append("Prediction design lacks a clear internal/external validation strategy.")
 
     scores = {
         "Research question and design fit": (round(design, 1), 2.0),
@@ -369,8 +481,10 @@ def score_study_design(spec):
             cap = min(cap, 6.5)
         elif "baseline p values" in blocker:
             cap = min(cap, 8.0)
-        elif "Sensitivity" in blocker:
+        elif "robustness" in blocker:
             cap = min(cap, 7.0)
+        elif "validation strategy" in blocker:
+            cap = min(cap, 6.5)
     total = min(total, cap)
 
     if total >= 8.5:
@@ -393,7 +507,7 @@ def score_study_design(spec):
     priorities = []
     if blockers:
         priorities.extend(blockers[:3])
-    if "Sensitivity-analysis plan is absent or underspecified." not in blockers and sensitivity:
+    if sensitivity:
         priorities.append("Map each sensitivity analysis to the specific bias it addresses.")
     priorities.append("Ensure the final flowchart denominators reconcile exactly with Table 1 column n.")
     priorities.append("Add a concise top-journal caption and footnote set with denominator, missingness, and analysis-set definitions.")
@@ -446,6 +560,24 @@ def markdown_table(columns, rows):
     return "\n".join([header, align] + body)
 
 
+def render_footnote(spec):
+    study_type = normalize(spec.get("study_type", ""))
+    base = "Data are shown as mean (SD), median (IQR), or No. (%) unless otherwise indicated. Define denominator and missingness rules."
+    if any(term in study_type for term in ["prediction", "prognostic"]):
+        return base + " Define prediction time zero, outcome events/horizon, predictor timing, imputation, clustering, dataset partitions, internal validation, and external validation."
+    if any(term in study_type for term in ["diagnostic", "radiology", "imaging"]):
+        return base + " Define patient/image/lesion units, sampling pathway, index tests, reference standard, blinding, paired completeness, indeterminate results, thresholds, and reader/device structure."
+    if any(term in study_type for term in ["interrupted time series", "difference-in-differences", "difference in differences"]):
+        return base + " Define series/cluster, observation frequency, repeated pre/post periods, intervention point, ramp-up, outcome denominator/offset, baseline trend, seasonality, autocorrelation, and concurrent control."
+    if any(term in study_type for term in ["rct", "randomized", "stepped-wedge"]):
+        return base + " Define randomized analysis set, cluster/sequence when applicable, stratification factors, protocol deviations, estimand, and harms population. Baseline significance tests are not used to validate randomization."
+    if any(term in study_type for term in ["systematic review", "meta-analysis"]):
+        return "Each row represents one included study or analysis. Define design, population, intervention/exposure/test/model, comparator, outcome, follow-up, effect measure, and design-specific risk-of-bias judgement."
+    if any(term in study_type for term in ["rwe", "real-world evidence", "comparative effectiveness", "target trial", "observational causal"]):
+        return base + " Define time zero, covariate lookback, weighting/matching, SMD, missing-data handling, and analysis-set rules."
+    return base + " Define sampling, measurement timing, clustering or survey weights, and any inferential comparisons."
+
+
 def render(spec):
     study_type = spec.get("study_type", "unspecified study")
     guideline = infer_guideline(study_type)
@@ -471,6 +603,19 @@ def render(spec):
         f"- AI intervention/workflow role: {spec.get('ai_intervention', 'not specified')}",
         f"- Workflow stage: {spec.get('workflow_stage', 'not specified')}",
         f"- Comparator: {spec.get('comparator', 'not specified')}",
+        f"- Confirmed design ID: {spec.get('confirmed_design', 'not triaged')}",
+        f"- Reporting guideline stack: {'; '.join(spec.get('guideline_stack', [])) or guideline}",
+        "",
+        "## Design-Specific Method Stack",
+        "",
+        "Reporting guidelines:",
+        *[f"- {item}" for item in (spec.get("guideline_stack") or [guideline])],
+        "",
+        "Risk-of-bias/appraisal tools:",
+        *[f"- {item}" for item in (spec.get("bias_tools") or ["Select after confirming the design and estimand."])],
+        "",
+        "Analysis/validation methods:",
+        *[f"- {item}" for item in (spec.get("analysis_methods") or ["Select methods that address the confirmed design threats."])],
         "",
         "## Column Logic",
         "",
@@ -484,7 +629,7 @@ def render(spec):
         "",
         render_flowchart(spec),
         "",
-        "## Matching Or Grouping Plan",
+        "## Design-Specific Bias Control And Grouping Plan",
         "",
         *render_matching(spec),
         "",
@@ -494,9 +639,7 @@ def render(spec):
         "",
         "## Footnote Starter",
         "",
-        "Data are shown as mean (SD), median (IQR), or No. (%) unless otherwise indicated. "
-        "Percentages should be calculated using the prespecified denominator rule. "
-        "Define missingness, weighting, matching, tests, SMDs, and abbreviations here.",
+        render_footnote(spec),
         "",
         render_scoring_report(spec),
     ]
@@ -516,6 +659,7 @@ def main():
     parser.add_argument("spec", help="Path to JSON study specification")
     parser.add_argument("--out", help="Output Markdown path")
     parser.add_argument("--out-dir", help="Output directory for a multi-format package")
+    parser.add_argument("--triage", action="store_true", help="Run proposal triage and one-question clarification")
     parser.add_argument(
         "--formats",
         default="xlsx,csv,html,md",
@@ -525,6 +669,33 @@ def main():
 
     spec_path = Path(args.spec)
     spec = json.loads(spec_path.read_text(encoding="utf-8"))
+    if args.triage or spec.get("proposal"):
+        from classify_study import DESIGNS, render_markdown as render_triage, triage
+
+        triage_result = triage(spec)
+        if triage_result["ready_for_design"]:
+            profile = triage_result["recommended_design"]
+            spec.setdefault("study_type", DESIGNS[spec["confirmed_design"]]["label"])
+            spec.setdefault("guideline_stack", list(dict.fromkeys(profile["reporting"] + triage_result["guideline_overlays"])))
+            spec.setdefault("bias_tools", profile["bias_tools"])
+            spec.setdefault("analysis_methods", profile["methods"])
+            spec.setdefault("table1_guidance", profile["table"])
+            spec.setdefault("flow_guidance", profile["flow"])
+        else:
+            triage_markdown = render_triage(triage_result)
+            triage_json = json.dumps(triage_result, ensure_ascii=False, indent=2)
+            if args.out_dir:
+                output_dir = Path(args.out_dir)
+                output_dir.mkdir(parents=True, exist_ok=True)
+                (output_dir / "study-intake.md").write_text(triage_markdown, encoding="utf-8")
+                (output_dir / "study-intake.json").write_text(triage_json, encoding="utf-8")
+                print(output_dir / "study-intake.md")
+                print(output_dir / "study-intake.json")
+            elif args.out:
+                Path(args.out).write_text(triage_markdown, encoding="utf-8")
+            else:
+                print(triage_markdown)
+            return
     if args.out_dir:
         from generate_study_package import generate_package
 

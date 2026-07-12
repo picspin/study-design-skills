@@ -1,0 +1,20 @@
+{
+  "proposal": "随机评价临床决策支持系统是否降低严重用药错误",
+  "confirmed_design": "randomized_controlled_trial",
+  "answers": {
+    "primary_aim": "intervention_effect",
+    "rollout_structure": "randomized_individual",
+    "data_source": "prospective_primary",
+    "primary_outcome_family": "clinical_safety",
+    "analysis_unit": "patient"
+  },
+  "study_title": "Randomized Trial Of Clinical Decision Support",
+  "groups": [{"label": "CDSS"}, {"label": "Usual care"}],
+  "variables": [
+    {"name": "age", "label": "Age", "unit": "y", "type": "continuous"},
+    {"name": "sex", "label": "Sex", "type": "categorical"},
+    {"name": "baseline_risk", "label": "Baseline medication-error risk", "type": "continuous"},
+    {"name": "stratification", "label": "Randomization stratum", "type": "categorical"}
+  ],
+  "include_p_values": false
+}

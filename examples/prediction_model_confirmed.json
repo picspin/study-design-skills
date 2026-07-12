@@ -1,0 +1,27 @@
+{
+  "proposal": "开发模型预测住院患者30天死亡风险，并进行外部验证",
+  "confirmed_design": "prediction_model_development",
+  "answers": {
+    "primary_aim": "prediction",
+    "prediction_stage": "development",
+    "data_source": "retrospective_ehr",
+    "primary_outcome_family": "prediction_performance",
+    "analysis_unit": "patient"
+  },
+  "study_title": "Development And External Validation Of A 30-Day Mortality Model",
+  "population": "Eligible adult inpatients at prediction time zero",
+  "groups": [
+    {"label": "Development cohort"},
+    {"label": "Temporal validation cohort"},
+    {"label": "External-site cohort"}
+  ],
+  "variables": [
+    {"name": "age", "label": "Age", "unit": "y", "type": "continuous"},
+    {"name": "sex", "label": "Sex", "type": "categorical"},
+    {"name": "event_count", "label": "30-day deaths", "type": "continuous", "summary": "n_missing"},
+    {"name": "follow_up", "label": "Follow-up", "unit": "d", "type": "continuous", "summary": "median_iqr"},
+    {"name": "predictor_missingness", "label": "Predictor missingness", "type": "continuous"}
+  ],
+  "validation": "Bootstrap optimism correction plus temporal and external-site locked-model validation",
+  "include_p_values": false
+}

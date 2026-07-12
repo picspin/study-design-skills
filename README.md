@@ -48,6 +48,23 @@ python study-design-skills/scripts/design_study.py \
   --formats xlsx,csv,html,md
 ```
 
+Triage a broad proposal one question at a time:
+
+```bash
+python study-design-skills/scripts/classify_study.py \
+  examples/llm_quality_proposal.json \
+  --format markdown
+```
+
+After answering the intake fields and confirming the recommended design, generate a CITS package:
+
+```bash
+python study-design-skills/scripts/design_study.py \
+  examples/llm_quality_confirmed_cits.json \
+  --out-dir outputs/llm-quality-cits \
+  --formats xlsx,csv,html,md
+```
+
 Generate a Markdown-only design memo:
 
 ```bash
@@ -66,6 +83,8 @@ Journal scope-fit scores are editorial aids, not acceptance probabilities. Impac
 
 - The benchmark is an expert-style design and editorial-fit assessment, not a predicted acceptance rate.
 - A declared matching, weighting, or MI plan is not treated as completed analysis.
+- Reporting guidelines, risk-of-bias tools, and analysis methods are kept as separate layers.
+- Prediction studies use internal/external validation rather than default PSM; ITS/CITS use repeated-time-series identification; comparative diagnostic accuracy uses QUADAS-C alongside QUADAS-3 for appraisal.
 - Missing attrition denominators lower the benchmark and appear as blockers.
 - The included example data are synthetic and contain no real patient information.
 

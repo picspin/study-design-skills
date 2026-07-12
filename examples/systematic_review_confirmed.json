@@ -1,0 +1,12 @@
+{
+  "proposal": "系统综述并荟萃分析临床AI决策支持对患者结局的影响",
+  "confirmed_design": "systematic_review_meta_analysis",
+  "answers": {
+    "primary_aim": "evidence_synthesis",
+    "review_target": "intervention",
+    "review_scope": "quantitative_meta",
+    "data_source": "published_literature"
+  },
+  "study_title": "Systematic Review Of Clinical AI Decision Support",
+  "include_p_values": false
+}

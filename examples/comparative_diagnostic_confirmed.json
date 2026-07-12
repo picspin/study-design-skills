@@ -1,0 +1,27 @@
+{
+  "proposal": "在同一批受试者中比较两种影像AI的诊断准确性",
+  "confirmed_design": "comparative_diagnostic_accuracy",
+  "answers": {
+    "primary_aim": "diagnostic_accuracy",
+    "diagnostic_comparison": "paired",
+    "data_source": "prospective_primary",
+    "primary_outcome_family": "accuracy",
+    "analysis_unit": "patient"
+  },
+  "study_title": "Paired Comparative Diagnostic Accuracy Of Two Imaging AI Systems",
+  "population": "Consecutively enrolled clinically suspected patients",
+  "groups": [
+    {"label": "Reference-standard positive"},
+    {"label": "Reference-standard negative"}
+  ],
+  "variables": [
+    {"name": "age", "label": "Age", "unit": "y", "type": "continuous"},
+    {"name": "sex", "label": "Sex", "type": "categorical"},
+    {"name": "severity", "label": "Target-condition severity", "type": "categorical"},
+    {"name": "alternative_diagnosis", "label": "Alternative diagnoses", "type": "categorical"},
+    {"name": "scanner", "label": "Scanner/vendor/protocol", "type": "categorical"},
+    {"name": "paired_complete", "label": "Both index tests and reference standard complete", "type": "categorical"}
+  ],
+  "reference_standard": "Blinded expert panel using prespecified clinical and follow-up criteria",
+  "include_p_values": false
+}

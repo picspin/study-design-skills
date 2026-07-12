@@ -1,0 +1,38 @@
+{
+  "proposal": "我想研究在引入LLM智能体质控和监测预警系统与过往传统方式工作流对比下全局临床质控和不良事件发生率的变化和收益情况",
+  "confirmed_design": "controlled_interrupted_time_series",
+  "answers": {
+    "primary_aim": "intervention_effect",
+    "rollout_structure": "fixed_date_series",
+    "concurrent_control": "yes",
+    "data_source": "retrospective_ehr",
+    "primary_outcome_family": "clinical_safety",
+    "analysis_unit": "time_period"
+  },
+  "study_title": "LLM Agent Clinical Quality And Safety Evaluation",
+  "population": "Eligible inpatient encounters in intervention and concurrent control clinical units",
+  "groups": [
+    {"label": "Intervention series"},
+    {"label": "Concurrent control series"}
+  ],
+  "variables": [
+    {"name": "encounter_volume", "label": "Eligible encounters per month", "type": "continuous", "summary": "mean_sd"},
+    {"name": "age", "label": "Age", "unit": "y", "type": "continuous", "summary": "mean_sd"},
+    {"name": "acuity", "label": "Clinical acuity", "type": "categorical"},
+    {"name": "baseline_adverse_event_rate", "label": "Baseline adverse events", "unit": "per 1000 encounters", "type": "continuous", "summary": "mean_sd"},
+    {"name": "baseline_quality_defect_rate", "label": "Baseline quality defects", "unit": "per 1000 encounters", "type": "continuous", "summary": "mean_sd"},
+    {"name": "staffing", "label": "Clinical staffing level", "type": "continuous", "summary": "mean_sd"},
+    {"name": "season", "label": "Calendar season", "type": "categorical"}
+  ],
+  "time_zero": "Prespecified production deployment date after a separately defined ramp-up period",
+  "time_points": {"pre": 18, "post": 18, "frequency": "monthly"},
+  "reference_standard": "Blinded multidisciplinary adjudication of serious adverse events",
+  "sensitivity_analyses": [
+    "Alternative deployment interruption dates",
+    "Exclude the ramp-up period",
+    "Alternative autocorrelation and seasonality structures",
+    "Unaffected negative-control outcome and control-series falsification"
+  ],
+  "include_smd": false,
+  "include_p_values": false
+}

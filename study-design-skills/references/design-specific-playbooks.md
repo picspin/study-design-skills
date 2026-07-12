@@ -2,6 +2,28 @@
 
 Use this reference to connect Table 1, flowchart, grouping/matching, and sensitivity analyses for common high-impact biomedical designs.
 
+## Interrupted Time Series, Controlled ITS, And DiD
+
+Output package:
+
+- SQUIRE 2.0/TREND-aligned nonrandomized intervention description, with RECORD for routine data and DECIDE-AI for early live AI decision support where applicable.
+- Parallel intervention/control source-stream flow for CITS or panel construction for DiD.
+- Characteristics table describing clinical/workflow composition and baseline outcome trends, not merely a PSM balance table.
+- Time-series model specification: intervention point, level/slope, autocorrelation, seasonality, denominator/offset, cluster/site effects, and transition period.
+- Bias matrix for co-interventions, measurement changes, composition, spillover, secular trend, data completeness, and intervention independence.
+
+Required design decisions:
+
+- Fixed-date versus staggered rollout; randomized versus nonrandomized rollout.
+- Number and frequency of pre/post observations.
+- Concurrent control-series availability and comparability.
+- Stable eligibility, denominator, outcome definition, and ascertainment.
+- Primary clinical/safety/workflow outcome and intervention-effect estimand.
+- Ramp-up, model-version, concurrent-policy, staffing, and seasonal changes.
+- Segmented regression versus controlled segmented regression versus DiD/event-study model.
+
+Do not call one pre and one post aggregate an interrupted time series. Do not use PSM as the primary control for secular trends.
+
 ## RWE Comparative Effectiveness
 
 Output package:
@@ -33,6 +55,7 @@ Output package:
 - Table 1 by reference-standard status, index-test status, or analytic cohort.
 - Bias audit for selection, spectrum, verification, and reference-standard bias.
 - Sensitivity analyses for reader, device, site, threshold, and reference standard.
+- QUADAS-3-informed bias design; add QUADAS-C alongside QUADAS-3 when two or more index tests are compared within a primary comparative-accuracy question.
 
 Required design decisions:
 
@@ -52,6 +75,7 @@ Output package:
 - Predictor missingness and imputation plan.
 - Model type: Cox, penalized Cox, logistic, competing risk, ML, or other.
 - Performance plan: C-index, calibration, decision curve, and external validation.
+- PROBAST+AI-informed development/validation plan; no default PSM requirement.
 
 Required design decisions:
 
@@ -61,6 +85,7 @@ Required design decisions:
 - Event-per-parameter or effective sample-size logic.
 - Temporal/geographic/site split and leakage prevention.
 - Clustered, repeated, or multi-modal data handling.
+- Development versus locked external validation versus model updating versus clinical impact evaluation.
 
 ## AI Healthcare Workflow, CDSS, Triage, And Quality Improvement
 

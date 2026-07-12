@@ -16,6 +16,8 @@ Do not force every AI healthcare study into TRIPOD+AI, CONSORT-AI, or STARD-AI.
 
 If the user specifies ICAML, treat ICAML as the controlling local framework for AI clinical implementation and workflow evaluation, then cross-map to DECIDE-AI, SQUIRE, STROBE/RECORD, CONSORT-AI, STARD-AI, or TRIPOD+AI only when those frameworks match the study question.
 
+Before applying any AI guideline, run `study-intent-triage.md`. “AI study” is a technology label, not a design. A workflow intervention may be an ITS/CITS, DiD, stepped-wedge cluster RCT, or before-after study; a diagnostic AI study may be STARD-AI; a prediction model may be TRIPOD+AI; an early live CDSS evaluation may add DECIDE-AI.
+
 ## Common AI Healthcare Study Types
 
 | Study type | Primary question | Typical design | Table 1/flowchart focus |
@@ -26,6 +28,19 @@ If the user specifies ICAML, treat ICAML as the controlling local framework for 
 | CDSS | Does AI-assisted decision support change decisions, actions, outcomes, or safety? | DECIDE-AI early evaluation, pragmatic trial, stepped wedge, cluster trial, RWE | Alert recipients, recommendation exposure, acceptance/override, action taken, downstream outcome |
 | AI-assisted diagnosis | Does AI improve clinician diagnostic performance or workflow? | Reader study, prospective paired design, diagnostic accuracy, RCT, deployment study | Patients/images/cases, reader experience, AI-visible vs AI-hidden phase, reference standard |
 | LLM or generative AI clinical tool | Does generated output improve documentation, triage, summarization, handoff, or decision support? | Human evaluation, prospective deployment, randomized workflow study, implementation study | Input source, prompt/workflow context, reviewer role, output use, correction/override, safety review |
+
+## LLM Clinical Quality-Control Deployment
+
+For a proposal comparing LLM-agent quality control and adverse-event alerts with historical workflow:
+
+- Ask rollout structure first after confirming the intervention-effect aim.
+- Fixed-date deployment with repeated pre/post observations: ITS.
+- Add a comparable concurrent untreated series: controlled ITS.
+- Nonrandom staggered deployment: DiD/event study if assumptions are defensible.
+- Randomized staggered deployment: stepped-wedge cluster RCT.
+- Only one pre and one post aggregate: before-after study, not ITS.
+
+Reporting overlays commonly include SQUIRE 2.0, TREND, RECORD, and DECIDE-AI. Bias and analysis layers remain ROBINS-I plus segmented regression/EPOC criteria for nonrandomized ITS/CITS. PSM cannot control secular trend by itself.
 
 ## ICAML-Style Flowchart
 

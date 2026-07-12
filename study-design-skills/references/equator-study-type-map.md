@@ -23,6 +23,8 @@ Identify the design first. Table 1 should describe the population, groups, expos
 | Systematic review or meta-analysis | PRISMA; PRISMA-P for protocols; TRIPOD-SRMA for prediction model reviews | Usually create a study-characteristics table rather than patient-level Table 1. Include study design, population, intervention/exposure, outcomes, risk of bias, and follow-up. |
 | Case report or case series | CARE; specialty extensions such as CARE-radiology | Use a clinical summary table or timeline rather than conventional group baseline Table 1. |
 | Quality improvement study | SQUIRE | Describe setting, participants, context, intervention exposure, baseline process/outcome measures, and implementation periods. |
+| Interrupted time series / controlled ITS | TREND for nonrandomized intervention reporting; SQUIRE 2.0 for healthcare improvement; RECORD for routine data; DECIDE-AI for early live AI decision support | Describe intervention/control series, repeated pre/post periods, baseline level and slope, clinical/workflow composition, volume, season, staffing, and outcome ascertainment. |
+| Difference-in-differences / comparative panel | TREND plus STROBE; RECORD for routine data; SQUIRE 2.0 when framed as improvement | Describe intervention/control clusters before rollout, baseline outcome trends, composition, timing, spillovers, and cluster context. |
 | Economic evaluation | CHEERS | Describe population, intervention/comparator, perspective, time horizon, resource-use inputs, costs, utilities, and model assumptions. |
 | Qualitative research | SRQR; COREQ for interviews/focus groups | Use participant/context characteristics table: recruitment, setting, role, demographics, sampling, and data saturation, not inferential comparisons. |
 | Mixed-methods study | Mixed methods reporting guidance plus design-specific guideline | Separate quantitative baseline table from qualitative participant/context table when needed. |
@@ -52,6 +54,14 @@ The EQUATOR reporting-guideline library allows browsing by study type, clinical 
 - Flowchart: source data, eligibility, time zero/index date, treatment assignment, baseline covariate availability, matching/weighting/trimming, follow-up, final analytic cohort.
 - Sensitivity: MI versus complete-case, alternative matching/weighting, alternative confounder sets, negative controls, lag windows, E-value or quantitative bias analysis when appropriate.
 
+### ITS, Controlled ITS, And DiD
+
+- Columns/objects: intervention and control series, pre/post periods, or cluster rollout groups; add a time-series characteristics block rather than relying on a two-column balance table.
+- Rows: patient/encounter mix, baseline outcome level and trend, observation frequency, volume/denominator, season, staffing, site, concurrent initiatives, measurement definition, data completeness.
+- Analysis: segmented level/slope changes for ITS/CITS; group-by-time/event-study terms and pre-trend diagnostics for DiD.
+- Bias control: autocorrelation, seasonality, co-interventions, intervention-date specification, ramp-up, composition change, spillover, outcome-measurement change, and unaffected outcomes/series.
+- PSM is optional and secondary only when it addresses a clearly defined compositional causal contrast; it does not replace time-series identification.
+
 ### Diagnostic/Prognostic/AI
 
 - Columns: disease/reference-standard status, outcome/event status, development/validation/test cohort, site/time split, or model exposure group.
@@ -60,6 +70,8 @@ The EQUATOR reporting-guideline library allows browsing by study type, clinical 
 - Footnote leakage prevention, repeated measures, site clustering, and missing predictors.
 - Flowchart: one-gate/two-gate sampling for diagnostic studies; source-to-development/validation/test split for prediction and AI studies.
 - Sensitivity: kappa/reader agreement, device/site/protocol sensitivity, verification/reference-standard sensitivity, C-index/calibration/external validation for prediction.
+- Appraisal: use QUADAS-3 for diagnostic accuracy risk-of-bias/applicability assessment; use QUADAS-C alongside QUADAS-3 for within-study comparative accuracy questions. Use PROBAST+AI for prediction models.
+- Never treat propensity matching as a generic correction for diagnostic spectrum bias or prediction-model overfitting.
 
 ### AI Healthcare Workflow And ICAML-Style Studies
 
