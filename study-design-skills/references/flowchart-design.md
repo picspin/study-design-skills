@@ -4,6 +4,8 @@ Use this reference to design participant, cohort, dataset, and attrition flowcha
 
 ## Universal Flowchart Rules
 
+- Use the PRISMA/CONSORT visual grammar even outside evidence synthesis: a vertical main cohort, connected side boxes for exclusions, explicit group branches, rejoining analysis sets, and a figure caption. Call the figure PRISMA only for systematic/scoping reviews; label other figures by their applicable standard (CONSORT, STARD, STROBE/RECORD, TRIPOD+AI, ICAML/DECIDE-AI, or SQUIRE).
+- Render the HTML output as a real connected figure, not a numbered list of analysis steps.
 - Start with the broadest source population or data source.
 - Preserve denominators at each transition.
 - Attach every exclusion to timing: before time zero, at eligibility, at exposure assignment, during matching/weighting, during follow-up, at outcome ascertainment, or at final analysis.
@@ -11,6 +13,31 @@ Use this reference to design participant, cohort, dataset, and attrition flowcha
 - Keep missing-data exclusions visible even when multiple imputation is used.
 - Reconcile final analytic n with Table 1 column n.
 - Add a bias warning when attrition occurs after exposure assignment, after outcome measurement availability, or because of variables related to exposure and outcome.
+- Use `n = pending` for protocol placeholders. Never invent enrollment counts. Replace pending values from `flow_counts` only after reconciling source data.
+
+## Structured HTML Flow Inputs
+
+Use `flow_counts` for node denominators and `flow_exclusions` for reason lists. Keep stable machine-readable keys so later data updates redraw the figure without editing HTML.
+
+```json
+{
+  "flow_counts": {
+    "source_population": 1200,
+    "excluded_before_eligibility": 84,
+    "eligible_at_time_zero": 1116,
+    "primary_analysis": 1032
+  },
+  "flow_exclusions": {
+    "excluded_before_eligibility": [
+      "Outside the prespecified clinical population (n=40)",
+      "Duplicate or invalid record (n=24)",
+      "No linkable outcome record (n=20)"
+    ]
+  }
+}
+```
+
+Require every parent count to reconcile with retained and excluded child counts. Where the unit changes, label each denominator explicitly (for example, technologists, periods, examinations, patients, images, lesions, readers, records, reports, or studies).
 
 ## CONSORT RCT Flowchart
 

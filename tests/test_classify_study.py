@@ -238,6 +238,61 @@ class StudyTriageTests(unittest.TestCase):
             self.assertIn("Technologists randomized to AB or BA device sequence", result.stdout)
             self.assertNotIn("Allocated to intervention", result.stdout)
 
+    def test_html_uses_connected_crossover_enrollment_figure(self):
+        root = Path(__file__).parents[1]
+        spec = {
+            "study_title": "Randomized technologist crossover study",
+            "study_type": "Randomized controlled trial",
+            "comparator": "Two devices within the same technologists",
+            "groups": [{"label": "AB"}, {"label": "BA"}],
+            "variables": [{"name": "experience", "label": "Experience", "type": "continuous"}],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            spec_path = Path(temp_dir) / "spec.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            subprocess.run(
+                ["python3", str(root / "study-design-skills/scripts/design_study.py"), str(spec_path), "--out-dir", temp_dir, "--formats", "html"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            report = next(Path(temp_dir).glob("*-report.html")).read_text(encoding="utf-8")
+            self.assertIn('<figure class="enrollment-figure">', report)
+            self.assertIn("CONSORT-style participant flow", report)
+            self.assertIn("Sequence AB", report)
+            self.assertIn("Excluded before randomization", report)
+            self.assertIn("n = pending", report)
+            self.assertNotIn('<ol class="flow">', report)
+
+    def test_null_study_type_is_filled_from_confirmed_design(self):
+        root = Path(__file__).parents[1]
+        spec = {
+            "proposal": "Randomize nursing technologists to AB or BA device sequences in a crossover trial",
+            "confirmed_design": "randomized_controlled_trial",
+            "study_type": None,
+            "answers": {
+                "primary_aim": "intervention_effect",
+                "rollout_structure": "individual_randomized",
+                "data_source": "prospective_primary",
+                "primary_outcome_family": "clinical_quality",
+                "analysis_unit": "clinician",
+            },
+            "groups": [{"label": "AB"}, {"label": "BA"}],
+            "variables": [{"name": "experience", "label": "Experience", "type": "continuous"}],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            spec_path = Path(temp_dir) / "spec.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            subprocess.run(
+                ["python3", str(root / "study-design-skills/scripts/design_study.py"), str(spec_path), "--out-dir", temp_dir, "--formats", "html"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            report = next(Path(temp_dir).glob("*-report.html")).read_text(encoding="utf-8")
+            self.assertIn("Randomized controlled trial", report)
+            self.assertIn("CONSORT-style participant flow", report)
+
 
 if __name__ == "__main__":
     unittest.main()

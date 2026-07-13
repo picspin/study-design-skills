@@ -598,6 +598,116 @@ def flow_steps(spec):
     return ["Source population", "Eligibility", "Study groups", "Follow-up", "Final analysis"]
 
 
+def enrollment_flow_html(spec):
+    """Render a publication-style enrollment figure without external JS dependencies."""
+    study = text_norm(spec.get("study_type"))
+    title_text = text_norm(f"{spec.get('study_title', '')} {spec.get('comparator', '')}")
+    counts = spec.get("flow_counts") or {}
+    exclusions = spec.get("flow_exclusions") or {}
+
+    def count(key, prefix="n"):
+        value = counts.get(key)
+        return f"{prefix} = {html.escape(str(value))}" if value is not None else f"{prefix} = pending"
+
+    def box(label, key=None, detail=None, kind="main"):
+        number = f'<span class="flow-count">{count(key)}</span>' if key else ""
+        extra = f'<span class="flow-detail">{html.escape(str(detail))}</span>' if detail else ""
+        return f'<div class="flow-box {kind}"><strong>{html.escape(label)}</strong>{number}{extra}</div>'
+
+    def exclusion(label, key, defaults):
+        reasons = exclusions.get(key) or defaults
+        if isinstance(reasons, str):
+            reasons = [reasons]
+        items = "".join(f"<li>{html.escape(str(item))}</li>" for item in reasons)
+        return f'<div class="flow-box exclusion"><strong>{html.escape(label)}</strong><span class="flow-count">{count(key)}</span><ul>{items}</ul></div>'
+
+    def down():
+        return '<div class="flow-down" aria-hidden="true">&#8595;</div>'
+
+    def side(main, excluded):
+        return f'<div class="flow-row"><div>{main}</div><div class="flow-side-arrow" aria-hidden="true">&#8594;</div><div>{excluded}</div></div>'
+
+    def branches(left, right, left_label=None, right_label=None):
+        left_head = f'<div class="flow-branch-label">{html.escape(left_label)}</div>' if left_label else ""
+        right_head = f'<div class="flow-branch-label">{html.escape(right_label)}</div>' if right_label else ""
+        return f'<div class="flow-split" aria-hidden="true"><span></span><span></span></div><div class="flow-branches"><div>{left_head}{left}</div><div>{right_head}{right}</div></div>'
+
+    def arm_side(main, excluded):
+        return f'<div class="flow-arm-row"><div>{main}</div><div class="flow-arm-arrow" aria-hidden="true">&#8594;</div><div>{excluded}</div></div>'
+
+    standard = "Study-specific participant flow"
+    caption = "Flow of participants or examinations through eligibility, allocation/exposure, attrition, and final analysis."
+
+    if any(term in study for term in ["systematic review", "meta-analysis"]):
+        standard = "PRISMA 2020"
+        body = side(box("Records identified from databases and other sources", "records_identified"), exclusion("Records removed before screening", "records_removed", ["Duplicate records", "Automation or other prespecified removals"]))
+        body += down() + side(box("Titles and abstracts screened", "records_screened"), exclusion("Records excluded", "records_excluded", ["Clearly ineligible by title/abstract"]))
+        body += down() + side(box("Reports assessed for eligibility", "full_texts"), exclusion("Full-text reports excluded", "full_texts_excluded", ["Wrong population/design/outcome", "Insufficient or unavailable data", "Other prespecified reasons"]))
+        body += down() + box("Studies included in qualitative synthesis", "included_studies", kind="final")
+        body += down() + box("Studies included in each meta-analysis", "meta_analysis_studies", kind="final")
+        caption = "PRISMA 2020 flow of records, reports, and studies through identification, screening, eligibility, and synthesis."
+    elif any(term in study for term in ["rct", "randomized", "trial"]):
+        standard = "CONSORT-style participant flow"
+        crossover = "crossover" in title_text or "within the same" in title_text
+        body = side(box("Assessed for eligibility", "source_population"), exclusion("Excluded before randomization", "excluded_before_randomization", ["Did not meet eligibility criteria", "Declined participation", "Other prespecified reasons"]))
+        body += down() + box("Randomized", "randomized", kind="anchor")
+        if crossover:
+            left = box("Allocated to sequence AB", "sequence_ab") + down() + box("Period 1: information-enabled/new device", "ab_period_1") + down() + box("Period 2: comparator device", "ab_period_2") + down() + arm_side(box("Sequence AB retained", "ab_analyzed"), exclusion("Excluded", "ab_excluded", ["No evaluable examinations", "Protocol or outcome-data failure"]))
+            right = box("Allocated to sequence BA", "sequence_ba") + down() + box("Period 1: comparator device", "ba_period_1") + down() + box("Period 2: information-enabled/new device", "ba_period_2") + down() + arm_side(box("Sequence BA retained", "ba_analyzed"), exclusion("Excluded", "ba_excluded", ["No evaluable examinations", "Protocol or outcome-data failure"]))
+            body += branches(left, right, "Sequence AB", "Sequence BA")
+            body += '<div class="flow-join" aria-hidden="true"><span></span><span></span></div>' + box("Included in mixed-effects intention-to-treat analysis", "primary_analysis", "Report technologist, period, and examination denominators", kind="final")
+            caption = "CONSORT-style flow of nursing technologists and cardiovascular CT examinations through AB/BA sequence allocation, crossover periods, attrition, and analysis."
+        else:
+            left = box("Allocated to intervention", "intervention_allocated") + down() + box("Received intervention", "intervention_received") + down() + arm_side(box("Analyzed in intervention arm", "intervention_analyzed", kind="final"), exclusion("Lost/discontinued", "intervention_lost", ["Lost to follow-up", "Discontinued with reasons"]))
+            right = box("Allocated to control", "control_allocated") + down() + box("Received control", "control_received") + down() + arm_side(box("Analyzed in control arm", "control_analyzed", kind="final"), exclusion("Lost/discontinued", "control_lost", ["Lost to follow-up", "Discontinued with reasons"]))
+            body += branches(left, right, "Intervention", "Control")
+            caption = "CONSORT-style participant flow through enrollment, randomization, allocation, follow-up, and analysis."
+    elif any(term in study for term in ["diagnostic", "radiology", "imaging"]):
+        standard = "STARD-style participant and test flow"
+        body = side(box("Patients/images assessed for eligibility", "source_population"), exclusion("Excluded before index testing", "excluded_before_index", ["Did not meet eligibility criteria", "Contraindication or unavailable imaging", "Other prespecified reasons"]))
+        body += down() + side(box("Index test completed", "index_tests_complete"), exclusion("Index test unavailable or indeterminate", "index_test_excluded", ["Acquisition failure", "Non-evaluable or indeterminate result"]))
+        body += down() + side(box("Reference standard completed", "reference_standard_complete"), exclusion("Reference standard unavailable", "reference_standard_excluded", ["Incomplete verification", "Timing or reference-standard criteria not met"]))
+        body += down() + branches(box("Target condition present", "disease_present"), box("Target condition absent", "disease_absent"))
+        body += '<div class="flow-join" aria-hidden="true"><span></span><span></span></div>' + box("Included in diagnostic accuracy analysis", "primary_analysis", "Report patient, image/lesion, and reader denominators separately", kind="final")
+        caption = "STARD-style flow through eligibility, index testing, reference-standard verification, and diagnostic accuracy analysis."
+    elif any(term in study for term in ["prediction", "prognostic", "survival", "medical ai"]):
+        standard = "TRIPOD+AI-style cohort flow"
+        body = side(box("Source population/data repository", "source_population"), exclusion("Excluded before prediction time zero", "excluded_before_time_zero", ["Ineligible population or timing", "No usable outcome window", "Invalid or unavailable predictors"]))
+        body += down() + box("Modeling cohort at prediction time zero", "modeling_cohort", "Report outcome events and censoring", kind="anchor")
+        body += branches(box("Development and internal validation cohort", "development_cohort", "Include events"), box("External/temporal/geographic validation cohort", "external_validation_cohort", "Include events"), "Development", "Validation")
+        caption = "TRIPOD+AI-style flow from source data through eligibility, prediction time zero, development, and independent validation."
+    elif any(term in study for term in ["interrupted time series", "difference-in-differences", "difference in differences"]):
+        standard = "STROBE/RECORD and SQUIRE-style encounter flow"
+        body = side(box("Cardiovascular CT examinations in the source ward", "source_population"), exclusion("Excluded before cohort entry", "excluded_before_eligibility", ["Outside the prespecified CT population", "Duplicate/test/invalid injector record", "No linkable examination or outcome record"]))
+        body += down() + box("Eligible examinations with stable definitions and denominators", "eligible_at_time_zero", kind="anchor")
+        left = box("2025 pre-implementation period", "pre_period_exams", "Old-device injection protocol") + down() + arm_side(box("Retained pre-period observations", "pre_time_points"), exclusion("Excluded", "pre_period_excluded", ["Unapproved/unavailable records", "Non-comparable protocol or missing linkage"]))
+        right = box("2026 post-implementation period", "post_period_exams", "Advanced new-device protocol bundle") + down() + arm_side(box("Retained post-period observations", "post_time_points"), exclusion("Excluded", "post_period_excluded", ["Prespecified ramp-up/transition window", "Non-comparable protocol or missing linkage"]))
+        body += branches(left, right, "Pre-implementation", "Post-implementation")
+        body += '<div class="flow-join" aria-hidden="true"><span></span><span></span></div>' + box("Included in segmented time-series analysis", "primary_analysis", "Report examinations, time points, events, and exposure denominators", kind="final")
+        caption = "STROBE/RECORD and SQUIRE-style flow of cardiovascular CT examinations through eligibility, calendar-period assignment, exclusions, and segmented time-series analysis."
+    elif any(term in study for term in ["ai", "cdss", "triage", "workflow"]):
+        standard = "ICAML/DECIDE-AI-style clinical workflow flow"
+        body = side(box("Eligible clinical encounters", "source_population"), exclusion("Excluded before AI workflow entry", "excluded_before_trigger", ["Outside deployment scope", "Missing required input", "Safety or governance exclusion"]))
+        body += down() + side(box("AI trigger met and output generated", "ai_output_generated"), exclusion("AI output failure", "ai_output_failed", ["Unavailable data", "Timeout/interface failure", "Unsafe or invalid output"]))
+        body += down() + side(box("Output shown to clinician/team", "ai_output_visible"), exclusion("Not reviewed", "not_reviewed", ["Workflow/staffing constraint", "Alert fatigue or interface issue"]))
+        body += down() + box("Accepted, modified, overridden, or ignored", "clinician_action")
+        body += down() + box("Outcome and safety ascertainment complete", "primary_analysis", kind="final")
+        caption = "ICAML/DECIDE-AI-style flow from eligible encounters through AI triggering, clinician interaction, downstream action, and outcome ascertainment."
+    else:
+        standard = "STROBE/RECORD-style participant flow"
+        body = side(box("Source population/data repository", "source_population"), exclusion("Excluded before eligibility", "excluded_before_eligibility", ["Outside sampling frame", "Duplicate or invalid record"]))
+        body += down() + side(box("Potentially eligible participants", "potentially_eligible"), exclusion("Excluded before time zero", "excluded_before_time_zero", ["Eligibility criteria not met", "Insufficient baseline/lookback data"]))
+        body += down() + box("Exposure groups assigned at time zero", "exposure_assigned", kind="anchor")
+        body += down() + side(box("Follow-up and outcome ascertainment", "follow_up"), exclusion("Excluded/lost after cohort entry", "lost_after_entry", ["Loss to follow-up", "Outcome unavailable", "Report timing and bias implications"]))
+        body += down() + box("Final primary analysis cohort", "primary_analysis", kind="final")
+
+    return (
+        f'<figure class="enrollment-figure"><div class="flow-standard">{html.escape(standard)}</div>'
+        f'<div class="flow-canvas">{body}</div><figcaption><strong>Figure 1.</strong> {html.escape(caption)} '
+        'Counts marked <em>pending</em> are protocol placeholders and must be reconciled with Table 1 before submission.</figcaption></figure>'
+    )
+
+
 def score_rows(spec, data=None):
     scores, total, ceiling, blockers, strengths, priorities = score_study_design(spec)
     scores = dict(scores)
@@ -838,7 +948,7 @@ def write_html(path, spec, columns, rows, journals, categories, scoring):
     domain_rows = "".join(
         f"<tr><td>{html.escape(item['domain'])}</td><td>{item['score']:.1f}/{item['maximum']:.1f}</td></tr>" for item in score_rows_data
     )
-    steps = "".join(f"<li><span>{index}</span>{html.escape(step)}</li>" for index, step in enumerate(flow_steps(spec), 1))
+    enrollment_figure = enrollment_flow_html(spec)
     blocker_html = "".join(f"<li>{html.escape(item)}</li>" for item in blockers) or "<li>No automatic critical blocker detected; manual review remains required.</li>"
     priority_html = "".join(f"<li>{html.escape(item)}</li>" for item in priorities[:5])
     warnings_html = "".join(f"<li>{html.escape(item)}</li>" for item in infer_design_warnings(spec))
@@ -869,14 +979,23 @@ main{{max-width:1180px;margin:0 auto;padding:28px 24px 60px}} h2{{font-size:21px
 .meta,.scores{{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}} .panel{{background:white;border:1px solid var(--line);border-radius:6px;padding:17px}}
 .label{{color:var(--muted);font-size:12px;text-transform:uppercase}} .big{{font-size:30px;font-weight:700;color:var(--teal)}}
 .table-wrap{{overflow:auto;background:white;border:1px solid var(--line)}} table{{width:100%;border-collapse:collapse;font-size:13px}} th{{background:var(--teal);color:white;text-align:left;padding:10px;position:sticky;top:0}} td{{padding:8px 10px;border-bottom:1px solid var(--line)}} td.numeric{{text-align:right;white-space:nowrap}} tr.variable td:first-child{{font-weight:700;background:#f1f5f5}} tr.level td:first-child{{padding-left:26px}}
-.flow{{list-style:none;padding:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}} .flow li{{background:white;border:1px solid var(--line);padding:12px;min-height:78px}} .flow span{{display:block;color:var(--teal);font-weight:700;font-size:12px}}
-.warning{{border-left:4px solid var(--warn)}} .fine{{color:var(--muted);font-size:12px}} ul,ol{{padding-left:20px}} @media print{{header{{padding:24px}} main{{padding:16px}} .table-wrap{{overflow:visible}}}}
+	.enrollment-figure{{margin:0;background:white;border:1px solid var(--line);padding:20px;overflow:auto}} .flow-standard{{font-size:12px;font-weight:700;color:var(--teal);text-transform:uppercase;margin-bottom:16px}}
+	.flow-canvas{{max-width:900px;min-width:620px;margin:0 auto;padding:4px 18px 8px}} .flow-box{{border:2px solid #285b69;background:#fff;padding:11px 14px;text-align:center;min-height:66px;display:flex;flex-direction:column;justify-content:center;box-shadow:0 1px 0 rgba(22,43,54,.08)}}
+	.flow-box.anchor{{background:#e2f0f1}} .flow-box.final{{background:#285b69;color:#fff}} .flow-box.exclusion{{border-width:1.5px;text-align:left;background:#f8faf9}} .flow-box.exclusion ul{{margin:5px 0 0;padding-left:18px;font-size:12px;line-height:1.35}}
+	.flow-count{{display:block;color:#0b62c4;font-weight:700;margin-top:3px}} .flow-box.final .flow-count{{color:#fff}} .flow-detail{{display:block;font-size:12px;color:var(--muted);margin-top:4px}} .flow-box.final .flow-detail{{color:#e0ecee}}
+	.flow-down{{height:34px;text-align:center;font-size:29px;line-height:34px;color:#285b69;font-weight:400}} .flow-row{{display:grid;grid-template-columns:minmax(0,1fr) 52px minmax(0,1fr);align-items:center}} .flow-side-arrow{{font-size:29px;text-align:center;color:#285b69}}
+	.flow-arm-row{{display:grid;grid-template-columns:minmax(0,1fr) 24px minmax(0,1fr);align-items:center}} .flow-arm-row .flow-box{{padding:9px;min-height:92px;font-size:12px}} .flow-arm-row .flow-box.exclusion ul{{font-size:10px;padding-left:14px}} .flow-arm-arrow{{text-align:center;color:#285b69;font-size:20px}}
+	.flow-branches{{display:grid;grid-template-columns:1fr 1fr;gap:48px}} .flow-branch-label{{text-align:center;font-size:12px;font-weight:700;color:var(--teal);text-transform:uppercase;margin:0 0 7px}} .flow-split,.flow-join{{height:42px;position:relative;margin:0 24%}}
+	.flow-split::before{{content:"";position:absolute;left:0;right:0;top:20px;border-top:2px solid #285b69}} .flow-split::after{{content:"";position:absolute;left:50%;top:0;height:21px;border-left:2px solid #285b69}} .flow-split span::before{{content:"";position:absolute;top:20px;height:15px;border-left:2px solid #285b69}} .flow-split span::after{{content:"";position:absolute;top:33px;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #285b69}} .flow-split span:first-child::before{{left:0}} .flow-split span:last-child::before{{right:0}} .flow-split span:first-child::after{{left:-5px}} .flow-split span:last-child::after{{right:-5px}}
+	.flow-join::before{{content:"";position:absolute;left:0;right:0;top:0;border-top:2px solid #285b69}} .flow-join::after{{content:"";position:absolute;left:calc(50% - 5px);top:22px;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #285b69}} .flow-join span:first-child::before,.flow-join span:last-child::before{{content:"";position:absolute;top:0;height:21px;border-left:2px solid #285b69}} .flow-join span:first-child::before{{left:0}} .flow-join span:last-child::before{{right:0}} .flow-join span:first-child::after{{content:"";position:absolute;left:50%;top:0;height:23px;border-left:2px solid #285b69}} figcaption{{max-width:900px;margin:15px auto 0;color:var(--muted);font-size:12px}}
+	.warning{{border-left:4px solid var(--warn)}} .fine{{color:var(--muted);font-size:12px}} ul,ol{{padding-left:20px}} @media print{{header{{padding:24px}} main{{padding:16px}} .table-wrap{{overflow:visible}}}}
+	@media (max-width:720px){{.enrollment-figure{{padding:12px}} .flow-canvas{{transform-origin:top left}}}}
 </style></head><body>
 <header><h1>{html.escape(spec.get('study_title') or 'Study Design and Table 1 Report')}</h1><p>{html.escape(spec.get('population', 'Study population'))}</p></header>
 <main>
 <section class="meta"><div class="panel"><div class="label">Study design</div><strong>{html.escape(str(spec.get('study_type','Unspecified')))}</strong></div><div class="panel"><div class="label">Guideline</div><strong>{html.escape(infer_guideline(spec.get('study_type')))}</strong></div><div class="panel"><div class="label">Time zero</div><strong>{html.escape(str(spec.get('time_zero','Not specified')))}</strong></div><div class="panel"><div class="label">Target categories</div><strong>{html.escape('; '.join(categories))}</strong></div></section>
 <h2>{html.escape(output_table_name(spec))}</h2>{html_table(columns, rows)}<p class="fine">The characteristics object, denominator rules, balance metrics, and inferential columns are selected from the confirmed study design.</p>
-<h2>Enrollment and analysis flow</h2><ol class="flow">{steps}</ol>
+	<h2>Enrollment and analysis flow</h2>{enrollment_figure}
 <h2>Sample size estimation</h2>{sample_html}<div class="panel"><strong>Interpretation caveats</strong><ul>{sample_caveats}</ul></div>
 <h2>Journal scope fit</h2><div class="table-wrap"><table><thead><tr><th>Journal</th><th>WoS category</th><th>2025 IF</th><th>Scope fit /10</th><th>Rationale</th></tr></thead><tbody>{journal_rows}</tbody></table></div><p class="fine">Source: user-provided JCR-70.xlsx, treated as a JCR 2026 reference set with a 2025 impact-factor column. Scope-fit scores are not acceptance probabilities and do not substitute for current author-instruction checks.</p>
 <h2>JCR top-journal benchmark</h2><p><strong>Benchmark family:</strong> {html.escape(benchmark_family)}</p><div class="scores"><div class="panel"><div class="label">Current score</div><div class="big">{total:.1f}/10</div></div><div class="panel"><div class="label">Post-revision ceiling</div><div class="big">{ceiling:.1f}/10</div></div></div><div class="table-wrap"><table><thead><tr><th>Domain</th><th>Score</th></tr></thead><tbody>{domain_rows}</tbody></table></div>

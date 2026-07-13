@@ -65,6 +65,9 @@ Use this skill for requests such as:
 
 5. Design the flowchart before finalizing Table 1 denominators.
    - Load `references/flowchart-design.md` for flowchart templates and attrition logic.
+   - Render HTML enrollment as a connected, publication-style figure with a vertical cohort spine, side exclusions with reasons, allocation/exposure branches, attrition, final analysis sets, and a caption. Do not substitute a numbered step list.
+   - Use PRISMA as the visual grammar but reserve the PRISMA label for evidence synthesis. Label clinical-study figures CONSORT-, STARD-, STROBE/RECORD-, TRIPOD+AI-, ICAML/DECIDE-AI-, or SQUIRE-style as appropriate.
+   - Populate `flow_counts` and `flow_exclusions`; display `n = pending` rather than inventing counts, and reconcile all final denominators with Table 1.
    - Make every exclusion and analytic-set transition visible: source population, eligibility, exclusions, exposure/treatment assignment, matching/weighting, missingness exclusions, follow-up, outcome ascertainment, and final analysis set.
    - For STROBE/RECORD RWE, use a funnel-style attrition diagram and warn about selection bias whenever exclusions occur after exposure assignment, after outcome availability, or due to missing data.
    - For CONSORT RCTs, preserve allocation, follow-up, and analysis nodes by randomized arm.
@@ -203,7 +206,7 @@ python scripts/design_study.py study_spec.json \
   --formats xlsx,csv,html,md
 ```
 
-The input JSON can include `study_title`, `study_type`, `clinical_area`, `journal`, `population`, `data_file`, `data_sheet`, `group_column`, `weight_column`, `id_column`, `groups`, `variables`, `include_overall`, `include_p_values`, `include_smd`, `show_missing`, `flowchart`, `flow_counts`, `time_zero`, `analysis_stage`, `matching`, `matching_status`, `missing_data`, `imputation_status`, `sensitivity_analyses`, `benchmark`, `target_jcr_category`, `journal_catalog`, and `notes`.
+The input JSON can include `study_title`, `study_type`, `clinical_area`, `journal`, `population`, `data_file`, `data_sheet`, `group_column`, `weight_column`, `id_column`, `groups`, `variables`, `include_overall`, `include_p_values`, `include_smd`, `show_missing`, `flowchart`, `flow_counts`, `flow_exclusions`, `time_zero`, `analysis_stage`, `matching`, `matching_status`, `missing_data`, `imputation_status`, `sensitivity_analyses`, `benchmark`, `target_jcr_category`, `journal_catalog`, and `notes`.
 
 Define each variable as `{"name": "source_column", "label": "Publication label", "type": "continuous|categorical", "summary": "mean_sd|median_iqr|n_percent", "unit": "optional", "levels": ["optional", "order"]}`. Resolve relative `data_file` and `journal_catalog` paths from the JSON specification directory.
 

@@ -701,12 +701,18 @@ def main():
         triage_result = triage(spec)
         if triage_result["ready_for_design"]:
             profile = triage_result["recommended_design"]
-            spec.setdefault("study_type", DESIGNS[spec["confirmed_design"]]["label"])
-            spec.setdefault("guideline_stack", list(dict.fromkeys(profile["reporting"] + triage_result["guideline_overlays"])))
-            spec.setdefault("bias_tools", profile["bias_tools"])
-            spec.setdefault("analysis_methods", profile["methods"])
-            spec.setdefault("table1_guidance", profile["table"])
-            spec.setdefault("flow_guidance", profile["flow"])
+            if not spec.get("study_type"):
+                spec["study_type"] = DESIGNS[spec["confirmed_design"]]["label"]
+            if not spec.get("guideline_stack"):
+                spec["guideline_stack"] = list(dict.fromkeys(profile["reporting"] + triage_result["guideline_overlays"]))
+            if not spec.get("bias_tools"):
+                spec["bias_tools"] = profile["bias_tools"]
+            if not spec.get("analysis_methods"):
+                spec["analysis_methods"] = profile["methods"]
+            if not spec.get("table1_guidance"):
+                spec["table1_guidance"] = profile["table"]
+            if not spec.get("flow_guidance"):
+                spec["flow_guidance"] = profile["flow"]
         else:
             triage_markdown = render_triage(triage_result)
             triage_json = json.dumps(triage_result, ensure_ascii=False, indent=2)
