@@ -1,37 +1,74 @@
 # Study Design Skills
 
-Biomedical study-design skill for producing synchronized Table 1, participant-flow, journal-fit, and methodological benchmark deliverables.
+A production-oriented biomedical study-design skill that converts a proposal into one validated JSON content source, then renders synchronized Table 1, enrollment flow, sample-size, journal-fit, and benchmark artifacts.
 
-It supports observational and real-world evidence studies, RCTs, diagnostic accuracy and radiology studies, prediction and survival models, AI healthcare workflows, CDSS, triage, and other EQUATOR-aligned designs.
+The architecture borrows a useful pattern from Anthropic's K12 teacher skills: keep the main skill small and route-specific, keep content separate from rendering, load only the references required for the selected domain, and enforce readability with machine-checkable rules.
 
-## Outputs
+## Architecture
 
-One study specification can generate:
+```text
+proposal
+  -> one-question triage
+  -> confirmed design
+  -> route-registry.json
+  -> route-specific references
+  -> canonical study-package JSON
+  -> schema + method + density validation
+  -> deterministic CSV/XLSX/HTML/Markdown renderers
+  -> shared + design-family evaluation rubrics
+```
 
-- publication-oriented Excel workbook (`Table 1`, `Journal Fit`, `Benchmark`, and `Methods Notes` sheets);
-- machine-readable CSV Table 1;
-- self-contained HTML study-design report;
-- Markdown design memo;
-- design-specific flow and attrition logic;
-- journal scope-fit recommendations and a 10-point methodological benchmark.
-
-The observational/RWE workflow emphasizes time zero, DAG-informed confounder selection, transparent matching or weighting, SMD rather than baseline P values, missing-data handling, and sensitivity analyses. Planned PSM/MI is scored differently from completed matching, weighting, or imputation.
-
-## Repository Layout
+The canonical JSON is the source of truth. HTML, XLSX, CSV, Markdown, and flowcharts are views of the same object, not separately authored documents.
 
 ```text
 study-design-skills/
   SKILL.md
+  schemas/
+    study-package.schema.json
   references/
+    route-registry.json
+    clinical-language-density.md
+    renderer-contract.md
+    mcp-integration-roadmap.md
+    ...
+  evals/rubrics/
+    shared.csv
+    randomized-trial.csv
+    causal-observational.csv
+    diagnostic-accuracy.csv
+    prediction.csv
+    time-series-qi.csv
+    ...
   scripts/
+    classify_study.py
+    compile_study_spec.py
+    validate_study_spec.py
+    select_rubrics.py
+    design_study.py
+    generate_study_package.py
 examples/
-  observational_package_spec.json
-  observational_patients.csv
+tests/
 ```
 
-## Quick Start
+## Design Routing
 
-Create a Python environment and install the runtime dependencies:
+`references/route-registry.json` maps each confirmed design to:
+
+- study-design family;
+- required reference bundle;
+- Table 1 profile;
+- enrollment-flow layout;
+- required content fields;
+- methods that must not be applied by default;
+- design-specific evaluation rubric.
+
+Supported routes include randomized and stepped-wedge trials, ITS/CITS/DiD, causal and descriptive observational studies, diagnostic accuracy, prediction development and validation, evidence synthesis, qualitative studies, and economic evaluation.
+
+The route keeps five layers separate: scientific question, study design, reporting guideline, bias tool, and analysis method. A familiar method such as PSM or multiple imputation cannot determine the design.
+
+## JSON-Driven Workflow
+
+Install dependencies:
 
 ```bash
 python3 -m venv .venv
@@ -39,16 +76,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Generate an observational-study package:
-
-```bash
-python study-design-skills/scripts/design_study.py \
-  examples/observational_package_spec.json \
-  --out-dir outputs/observational-cohort \
-  --formats xlsx,csv,html,md
-```
-
-Triage a broad proposal one question at a time:
+Triage an uncertain proposal:
 
 ```bash
 python study-design-skills/scripts/classify_study.py \
@@ -56,38 +84,76 @@ python study-design-skills/scripts/classify_study.py \
   --format markdown
 ```
 
-After answering the intake fields and confirming the recommended design, generate a CITS package:
+Compile a confirmed or legacy flat specification:
+
+```bash
+python study-design-skills/scripts/compile_study_spec.py \
+  examples/randomized_trial_confirmed.json \
+  --out outputs/randomized-trial-study-package.json
+```
+
+Validate the contract and clinical-density rules:
+
+```bash
+python study-design-skills/scripts/validate_study_spec.py \
+  outputs/randomized-trial-study-package.json
+
+python study-design-skills/scripts/validate_study_spec.py \
+  outputs/randomized-trial-study-package.json \
+  --strict
+```
+
+Non-strict validation is appropriate while assumptions and approval-dependent data remain pending. Strict validation converts missing route-required content into errors.
+
+Render synchronized outputs:
 
 ```bash
 python study-design-skills/scripts/design_study.py \
-  examples/llm_quality_confirmed_cits.json \
-  --out-dir outputs/llm-quality-cits \
+  examples/randomized_trial_confirmed.json \
+  --out-dir outputs/randomized-trial \
   --formats xlsx,csv,html,md
 ```
 
-Generate a Markdown-only design memo:
+Each rendered package includes the exact compiled `*-study-package.json` used by the renderers and a manifest recording the route and schema version.
+
+Select evaluation criteria:
 
 ```bash
-python study-design-skills/scripts/design_study.py \
-  examples/observational_package_spec.json \
-  --out outputs/study-design.md
+python study-design-skills/scripts/select_rubrics.py \
+  outputs/randomized-trial/randomized-trial-study-package.json \
+  --out outputs/randomized-trial/selected-rubrics.json
 ```
+
+## Output Contracts
+
+- **Table 1:** randomized arms, exposure balance, diagnostic spectrum, periods/series, validation cohorts, participant context, or study characteristics according to the route.
+- **Flowchart:** connected publication-style enrollment and analysis flow using the selected CONSORT, STARD, STROBE/RECORD, TRIPOD+AI, SQUIRE, or PRISMA-oriented layout.
+- **Sample size:** assumptions and analyzable/recruited targets aligned to the primary estimand; unsupported complex designs return `assumptions_required`.
+- **Benchmark:** shared criteria plus a design-family rubric and the JCR specialty profile, reported on a 10-point methodological/editorial-fit scale.
+- **Language:** clinically readable blocks, compact flow nodes, short labels, structured comparison tables, and explicit separation of known, planned, pending, and not estimable.
+
+The benchmark is not an acceptance probability. Planned matching, weighting, imputation, or validation is never scored as completed analysis.
+
+## External Evidence And MCP
+
+`references/mcp-integration-roadmap.md` defines three integration tiers:
+
+1. official public APIs for ClinicalTrials.gov, PubMed/NCBI E-utilities, and NIH RePORTER;
+2. a curated, versioned local knowledge service for EQUATOR, Cochrane, and Bristol QUADAS materials;
+3. deterministic statistical services for complex sample size, SMD/weighting diagnostics, DAG temporal checks, E-values, and risk-of-bias worksheets.
+
+External retrieval must preserve source URL, version, retrieval date, and limitations. Patient-level data remain local; only de-identified search concepts may be sent to public services.
 
 ## Journal Reference Set
 
-`references/jcr-2026-medicine-top69.csv` is normalized from a user-supplied workbook and contains 69 journal-category records representing 68 unique journal titles. The source set is labeled JCR 2026 and contains a 2025 impact-factor field.
+`references/jcr-2026-medicine-top69.csv` contains 69 category records representing 68 unique non-review journal titles from the supplied JCR workbook. Journal scope-fit is an editorial aid, not a substitute for methodological quality. Confirm current author instructions and data redistribution rights before public release.
 
-Journal scope-fit scores are editorial aids, not acceptance probabilities. Impact factor is not used as a substitute for methodological quality. Confirm current author instructions and data-redistribution rights before making the repository public or redistributing the catalog.
+## Development
 
-## Important Boundaries
+Run the test suite:
 
-- The benchmark is an expert-style design and editorial-fit assessment, not a predicted acceptance rate.
-- A declared matching, weighting, or MI plan is not treated as completed analysis.
-- Reporting guidelines, risk-of-bias tools, and analysis methods are kept as separate layers.
-- Prediction studies use internal/external validation rather than default PSM; ITS/CITS use repeated-time-series identification; comparative diagnostic accuracy uses QUADAS-C alongside QUADAS-3 for appraisal.
-- Missing attrition denominators lower the benchmark and appear as blockers.
-- The included example data are synthetic and contain no real patient information.
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
+```
 
-## 中文说明
-
-该 skill 面向医学研究设计，可从同一份研究规格生成 Excel、CSV、HTML 和 Markdown，并统一输出 Table 1、入组流程、期刊匹配及 10 分制顶刊方法学评分。观察性研究默认关注 Time Zero、DAG 混杂变量、PSM/加权透明度、SMD、MI 与敏感性分析；仅写入统计计划但尚未真正执行时，不会获得“已完成分析”的评分。
+The renderer migration is backward compatible. Legacy text inference remains only as a fallback; canonical `route.flow_layout` and `route.table_profile` take precedence, and new medical decision logic belongs in the route/compiler/reference layers.

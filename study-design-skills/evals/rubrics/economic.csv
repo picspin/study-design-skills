@@ -1,0 +1,3 @@
+ID,Bucket,Criterion,What pass requires,Notes,Conditional,Severity
+ECON1,Design,Economic question,"Perspective, population, comparators, time horizon, discounting, outcome measure, and decision context are explicit.","Clinical effectiveness inputs remain separately appraised.",family=economic,critical
+ECON2,Uncertainty,Model uncertainty,"Parameter, structural, scenario, and heterogeneity uncertainty are evaluated with deterministic and probabilistic analyses.","Report value-of-information when relevant.",family=economic,major

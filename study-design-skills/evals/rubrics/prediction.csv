@@ -1,0 +1,5 @@
+ID,Bucket,Criterion,What pass requires,Notes,Conditional,Severity
+PRED1,Design,Prediction target,"Prediction time, target population, outcome horizon, intended use, and decision point are explicit.","Do not confuse association with individual prediction.",family=prediction,critical
+PRED2,Analysis,Effective sample and optimism,"Event or effective-sample planning, missing data, shrinkage, bootstrap or resampling, and optimism correction are specified.","Random split alone is weak internal validation.",family=prediction,critical
+PRED3,Validation,Performance and transportability,"Discrimination, calibration, clinical utility, and temporal/geographic/site external validation are addressed.","Locked-model evaluation precedes updating.",family=prediction,critical
+PRED4,Table,Cohort comparison,"Characteristics and event counts are shown by development and validation cohort with site/time provenance.","PSM is not a default correction.",family=prediction,major

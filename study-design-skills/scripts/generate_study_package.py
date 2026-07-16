@@ -17,6 +17,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
+from compile_study_spec import compile_spec
 from design_study import (
     infer_design_warnings,
     infer_guideline,
@@ -66,11 +67,19 @@ def text_norm(value):
 def include_smd(spec):
     if "include_smd" in spec:
         return bool(spec["include_smd"])
+    route = spec.get("route") or {}
+    if route.get("table_profile") == "exposure_balance":
+        return True
     study = text_norm(spec.get("study_type"))
     return any(term in study for term in ["observational causal", "comparative effectiveness", "target trial", "real-world evidence", "rwe"])
 
 
 def output_table_name(spec):
+    table_profile = (spec.get("route") or {}).get("table_profile")
+    if table_profile in {"study_characteristics", "evidence_map"}:
+        return "Study Characteristics"
+    if table_profile == "participant_context":
+        return "Participant Context"
     study = text_norm(spec.get("study_type"))
     if any(term in study for term in ["systematic review", "meta-analysis"]):
         return "Study Characteristics"
@@ -601,6 +610,7 @@ def flow_steps(spec):
 def enrollment_flow_html(spec):
     """Render a publication-style enrollment figure without external JS dependencies."""
     study = text_norm(spec.get("study_type"))
+    layout = (spec.get("route") or {}).get("flow_layout", "")
     title_text = text_norm(f"{spec.get('study_title', '')} {spec.get('comparator', '')}")
     counts = spec.get("flow_counts") or {}
     exclusions = spec.get("flow_exclusions") or {}
@@ -638,7 +648,7 @@ def enrollment_flow_html(spec):
     standard = "Study-specific participant flow"
     caption = "Flow of participants or examinations through eligibility, allocation/exposure, attrition, and final analysis."
 
-    if any(term in study for term in ["systematic review", "meta-analysis"]):
+    if layout == "prisma_review" or any(term in study for term in ["systematic review", "meta-analysis"]):
         standard = "PRISMA 2020"
         body = side(box("Records identified from databases and other sources", "records_identified"), exclusion("Records removed before screening", "records_removed", ["Duplicate records", "Automation or other prespecified removals"]))
         body += down() + side(box("Titles and abstracts screened", "records_screened"), exclusion("Records excluded", "records_excluded", ["Clearly ineligible by title/abstract"]))
@@ -646,7 +656,7 @@ def enrollment_flow_html(spec):
         body += down() + box("Studies included in qualitative synthesis", "included_studies", kind="final")
         body += down() + box("Studies included in each meta-analysis", "meta_analysis_studies", kind="final")
         caption = "PRISMA 2020 flow of records, reports, and studies through identification, screening, eligibility, and synthesis."
-    elif any(term in study for term in ["rct", "randomized", "trial"]):
+    elif layout in {"consort_trial", "stepped_wedge"} or any(term in study for term in ["rct", "randomized", "trial"]):
         standard = "CONSORT-style participant flow"
         crossover = "crossover" in title_text or "within the same" in title_text
         body = side(box("Assessed for eligibility", "source_population"), exclusion("Excluded before randomization", "excluded_before_randomization", ["Did not meet eligibility criteria", "Declined participation", "Other prespecified reasons"]))
@@ -662,7 +672,7 @@ def enrollment_flow_html(spec):
             right = box("Allocated to control", "control_allocated") + down() + box("Received control", "control_received") + down() + arm_side(box("Analyzed in control arm", "control_analyzed", kind="final"), exclusion("Lost/discontinued", "control_lost", ["Lost to follow-up", "Discontinued with reasons"]))
             body += branches(left, right, "Intervention", "Control")
             caption = "CONSORT-style participant flow through enrollment, randomization, allocation, follow-up, and analysis."
-    elif any(term in study for term in ["diagnostic", "radiology", "imaging"]):
+    elif layout in {"stard_accuracy", "stard_comparative"} or any(term in study for term in ["diagnostic", "radiology", "imaging"]):
         standard = "STARD-style participant and test flow"
         body = side(box("Patients/images assessed for eligibility", "source_population"), exclusion("Excluded before index testing", "excluded_before_index", ["Did not meet eligibility criteria", "Contraindication or unavailable imaging", "Other prespecified reasons"]))
         body += down() + side(box("Index test completed", "index_tests_complete"), exclusion("Index test unavailable or indeterminate", "index_test_excluded", ["Acquisition failure", "Non-evaluable or indeterminate result"]))
@@ -670,13 +680,13 @@ def enrollment_flow_html(spec):
         body += down() + branches(box("Target condition present", "disease_present"), box("Target condition absent", "disease_absent"))
         body += '<div class="flow-join" aria-hidden="true"><span></span><span></span></div>' + box("Included in diagnostic accuracy analysis", "primary_analysis", "Report patient, image/lesion, and reader denominators separately", kind="final")
         caption = "STARD-style flow through eligibility, index testing, reference-standard verification, and diagnostic accuracy analysis."
-    elif any(term in study for term in ["prediction", "prognostic", "survival", "medical ai"]):
+    elif layout in {"tripod_development", "tripod_validation"} or any(term in study for term in ["prediction", "prognostic", "survival", "medical ai"]):
         standard = "TRIPOD+AI-style cohort flow"
         body = side(box("Source population/data repository", "source_population"), exclusion("Excluded before prediction time zero", "excluded_before_time_zero", ["Ineligible population or timing", "No usable outcome window", "Invalid or unavailable predictors"]))
         body += down() + box("Modeling cohort at prediction time zero", "modeling_cohort", "Report outcome events and censoring", kind="anchor")
         body += branches(box("Development and internal validation cohort", "development_cohort", "Include events"), box("External/temporal/geographic validation cohort", "external_validation_cohort", "Include events"), "Development", "Validation")
         caption = "TRIPOD+AI-style flow from source data through eligibility, prediction time zero, development, and independent validation."
-    elif any(term in study for term in ["interrupted time series", "difference-in-differences", "difference in differences"]):
+    elif layout in {"controlled_time_series", "time_series", "comparative_panel"} or any(term in study for term in ["interrupted time series", "difference-in-differences", "difference in differences"]):
         standard = "STROBE/RECORD and SQUIRE-style encounter flow"
         body = side(box("Cardiovascular CT examinations in the source ward", "source_population"), exclusion("Excluded before cohort entry", "excluded_before_eligibility", ["Outside the prespecified CT population", "Duplicate/test/invalid injector record", "No linkable examination or outcome record"]))
         body += down() + box("Eligible examinations with stable definitions and denominators", "eligible_at_time_zero", kind="anchor")
@@ -1008,6 +1018,7 @@ main{{max-width:1180px;margin:0 auto;padding:28px 24px 60px}} h2{{font-size:21px
 
 
 def generate_package(spec, spec_dir, output_dir, formats):
+    spec = compile_spec(spec)
     output_dir.mkdir(parents=True, exist_ok=True)
     data = load_data(spec, spec_dir)
     groups = resolve_groups(spec, data)
@@ -1020,7 +1031,9 @@ def generate_package(spec, spec_dir, output_dir, formats):
     journals, categories = journal_recommendations(spec, catalog)
     scoring = score_rows(spec, data)
     stem = safe_slug(spec.get("output_name") or spec.get("study_title") or "study-design")
-    outputs = []
+    canonical_path = output_dir / f"{stem}-study-package.json"
+    canonical_path.write_text(json.dumps(spec, indent=2, ensure_ascii=False), encoding="utf-8")
+    outputs = [canonical_path]
     if "csv" in formats:
         path = output_dir / f"{stem}-table1.csv"
         write_csv(path, columns, rows)
@@ -1043,6 +1056,8 @@ def generate_package(spec, spec_dir, output_dir, formats):
         "table_rows": len(rows),
         "journal_reference_records": len(catalog),
         "unique_journals": int(catalog["journal_key"].nunique()),
+        "schema_version": spec["schema_version"],
+        "route": spec["route"],
         "outputs": [str(path) for path in outputs],
     }
     manifest_path = output_dir / f"{stem}-manifest.json"

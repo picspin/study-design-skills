@@ -1,0 +1,5 @@
+ID,Bucket,Criterion,What pass requires,Notes,Conditional,Severity
+OBS1,Design,Time zero alignment,"Eligibility, exposure assignment, covariate assessment, follow-up, and outcome ascertainment align at a defensible time zero.","Audit immortal-time and prevalent-user bias.",family=causal_observational,critical
+OBS2,Bias,DAG covariate set,"Confounders are selected using clinical knowledge or a DAG; mediators, colliders, post-index, and post-outcome variables are excluded.","Prediction strength alone is insufficient.",family=causal_observational,critical
+OBS3,Analysis,Design transparency,"Estimand, PS or outcome model, matching/weighting settings, common support, trimming, discarded records, seed, and SMD diagnostics are reported.","SMD <0.1 is descriptive.",family=causal_observational,major
+OBS4,Sensitivity,Residual bias,"Missing-data, alternative design/model, negative-control or unmeasured-confounding analyses map to explicit threats.","Use E-values only for compatible effect measures.",family=causal_observational,major

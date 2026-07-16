@@ -9,6 +9,7 @@ import argparse
 import json
 from pathlib import Path
 
+from compile_study_spec import compile_spec
 from sample_size import estimate_sample_size, markdown_sample_size
 
 
@@ -728,6 +729,7 @@ def main():
             else:
                 print(triage_markdown)
             return
+    spec = compile_spec(spec)
     if args.out_dir:
         from generate_study_package import generate_package
 

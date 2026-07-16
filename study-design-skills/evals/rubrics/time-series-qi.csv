@@ -1,0 +1,5 @@
+ID,Bucket,Criterion,What pass requires,Notes,Conditional,Severity
+TS1,Design,Repeated-time identification,"Intervention date, ramp-up, observation frequency, sufficient pre/post points, and concurrent control when available are explicit.","One pre and one post aggregate is not ITS.",family=time_series_qi,critical
+TS2,Analysis,Time-series model,"Level and slope or event-study effects, autocorrelation, seasonality, cluster structure, offsets, and composition are specified.","Report intervention and control series separately.",family=time_series_qi,critical
+TS3,Bias,Co-intervention and trend threats,"Pre-trends, co-interventions, coding changes, staffing, secular trends, and falsification outcomes or dates are assessed.","PSM cannot replace trend identification.",family=time_series_qi,major
+TS4,Flow,Period flow,"Source encounters, eligibility, pre-periods, rollout/ramp-up, post-periods, excluded time points, and analyzed series are visible.","Counts include encounters, events, and time points.",family=time_series_qi,major

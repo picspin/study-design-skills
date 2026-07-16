@@ -1,0 +1,3 @@
+ID,Bucket,Criterion,What pass requires,Notes,Conditional,Severity
+QUAL1,Design,Sampling and information power,"Sampling strategy, setting, researcher role, information-power or saturation rationale, and stopping logic are explicit.","Participant context supports transferability.",family=qualitative,critical
+QUAL2,Rigor,Reflexive analysis,"Reflexivity, coding, audit trail, triangulation or member reflection, negative cases, and quotation selection are addressed.","Avoid quantitative balance testing.",family=qualitative,major

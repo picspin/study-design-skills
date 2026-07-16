@@ -1,0 +1,5 @@
+ID,Bucket,Criterion,What pass requires,Notes,Conditional,Severity
+REV1,Design,Review question and protocol,"Review type, eligibility, information sources, protocol or registration, and synthesis objective are explicit.","Do not call a broad evidence map a meta-analysis.",family=evidence_synthesis,critical
+REV2,Methods,Selection and extraction,"Search, deduplication, duplicate screening, extraction, and author contact are reproducible.","Show automation use and human verification.",family=evidence_synthesis,major
+REV3,Bias,Design-specific appraisal,"RoB 2, ROBINS-I, QUADAS, PROBAST+AI, or another applicable tool is selected by included design.","Do not use one quality scale for all designs.",family=evidence_synthesis,critical
+REV4,Synthesis,Heterogeneity and certainty,"Synthesis model, heterogeneity, influential studies, small-study effects when interpretable, and certainty are addressed.","Use structured narrative synthesis when pooling is invalid.",family=evidence_synthesis,major

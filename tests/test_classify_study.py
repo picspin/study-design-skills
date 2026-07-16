@@ -14,9 +14,86 @@ SAMPLE_SCRIPT = SCRIPT.parent / "sample_size.py"
 SAMPLE_SPEC = importlib.util.spec_from_file_location("sample_size", SAMPLE_SCRIPT)
 SAMPLE_MODULE = importlib.util.module_from_spec(SAMPLE_SPEC)
 SAMPLE_SPEC.loader.exec_module(SAMPLE_MODULE)
+COMPILER_SCRIPT = SCRIPT.parent / "compile_study_spec.py"
+COMPILER_SPEC = importlib.util.spec_from_file_location("compile_study_spec", COMPILER_SCRIPT)
+COMPILER_MODULE = importlib.util.module_from_spec(COMPILER_SPEC)
+COMPILER_SPEC.loader.exec_module(COMPILER_MODULE)
+VALIDATOR_SCRIPT = SCRIPT.parent / "validate_study_spec.py"
+VALIDATOR_SPEC = importlib.util.spec_from_file_location("validate_study_spec", VALIDATOR_SCRIPT)
+VALIDATOR_MODULE = importlib.util.module_from_spec(VALIDATOR_SPEC)
+VALIDATOR_SPEC.loader.exec_module(VALIDATOR_MODULE)
+RUBRIC_SCRIPT = SCRIPT.parent / "select_rubrics.py"
+RUBRIC_SPEC = importlib.util.spec_from_file_location("select_rubrics", RUBRIC_SCRIPT)
+RUBRIC_MODULE = importlib.util.module_from_spec(RUBRIC_SPEC)
+RUBRIC_SPEC.loader.exec_module(RUBRIC_MODULE)
 
 
 class StudyTriageTests(unittest.TestCase):
+    def test_compiler_routes_legacy_rct_to_canonical_contract(self):
+        result = COMPILER_MODULE.compile_spec({
+            "study_title": "Pragmatic randomized trial",
+            "study_type": "Randomized controlled trial",
+            "primary_objective": "Compare 30-day adverse events between randomized groups",
+            "population": "Eligible adults",
+            "time_zero": "randomization",
+            "groups": [{"label": "Intervention"}, {"label": "Control"}],
+        })
+        self.assertEqual(result["schema_version"], "1.0")
+        self.assertEqual(result["confirmed_design"], "randomized_controlled_trial")
+        self.assertEqual(result["route"]["family"], "randomized_trial")
+        self.assertEqual(result["route"]["flow_layout"], "consort_trial")
+        self.assertEqual(result["content_policy"]["table_cell_max_words"], 25)
+
+    def test_validator_flags_dense_clinical_narrative(self):
+        result = VALIDATOR_MODULE.validate_spec({
+            "study_title": "Cohort study",
+            "study_type": "Observational cohort",
+            "primary_objective": "Evaluate risk",
+            "population": "Adults",
+            "notes": ["First sentence. Second sentence. Third sentence. Fourth sentence."],
+        })
+        self.assertTrue(result["valid"])
+        self.assertIn("density_note", {item["code"] for item in result["warnings"]})
+
+    def test_compiler_preserves_external_provenance(self):
+        result = COMPILER_MODULE.compile_spec({
+            "study_title": "Cohort study",
+            "study_type": "Observational cohort",
+            "primary_objective": "Estimate event incidence",
+            "population": "Eligible adults",
+            "provenance": {
+                "external_sources": [
+                    {"source": "ClinicalTrials.gov", "retrieved": "2026-07-17"}
+                ]
+            },
+        })
+        self.assertEqual(result["provenance"]["external_sources"][0]["source"], "ClinicalTrials.gov")
+        self.assertEqual(result["provenance"]["registry_version"], "1.0")
+
+    def test_schema_validation_rejects_invalid_group_type(self):
+        result = VALIDATOR_MODULE.validate_spec({
+            "study_title": "Randomized trial",
+            "study_type": "Randomized controlled trial",
+            "primary_objective": "Compare event rates",
+            "population": "Eligible adults",
+            "time_zero": "randomization",
+            "groups": "Intervention and control",
+        })
+        self.assertFalse(result["valid"])
+        self.assertIn("schema", {item["code"] for item in result["errors"]})
+
+    def test_route_selects_shared_and_design_specific_rubrics(self):
+        result = RUBRIC_MODULE.select_rubrics({
+            "study_title": "Diagnostic study",
+            "study_type": "Diagnostic accuracy study",
+            "primary_objective": "Estimate sensitivity and specificity",
+            "population": "Consecutive suspected patients",
+            "reference_standard": "Expert adjudication",
+        })
+        self.assertEqual(result["route"]["family"], "diagnostic_accuracy")
+        self.assertEqual(result["rubric_files"], ["shared.csv", "diagnostic-accuracy.csv"])
+        self.assertGreater(len(result["criteria"]), 10)
+
     def test_parallel_rct_sample_size_reports_analyzable_and_recruited(self):
         result = SAMPLE_MODULE.estimate_sample_size({"sample_size": {
             "method": "parallel_proportions",
@@ -177,6 +254,9 @@ class StudyTriageTests(unittest.TestCase):
             memo = next(Path(temp_dir).glob("*-memo.md")).read_text(encoding="utf-8")
             self.assertIn("PROBAST+AI", memo)
             self.assertIn("bootstrap", memo.lower())
+            canonical = json.loads(next(Path(temp_dir).glob("*-study-package.json")).read_text(encoding="utf-8"))
+            self.assertEqual(canonical["schema_version"], "1.0")
+            self.assertEqual(canonical["route"]["family"], "prediction")
 
     def test_systematic_review_package_uses_study_characteristics(self):
         root = Path(__file__).parents[1]

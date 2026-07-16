@@ -1,0 +1,5 @@
+ID,Bucket,Criterion,What pass requires,Notes,Conditional,Severity
+RCT1,Design,Randomization integrity,"Allocation unit, sequence generation, concealment, stratification, and implementation are specified.","Cluster and crossover trials name the correct unit.",family=randomized_trial,critical
+RCT2,Analysis,Estimand and analysis set,"Primary estimand and intention-to-treat strategy are explicit; protocol deviations and missing outcomes are handled consistently.","Do not replace randomization with PSM.",family=randomized_trial,critical
+RCT3,Flow,CONSORT arm flow,"Eligibility, randomization, allocation, receipt, follow-up, discontinuation, and analysis appear by arm or sequence.","Crossover studies show periods and carryover handling.",family=randomized_trial,major
+RCT4,Table,Baseline display,"Table 1 uses randomized arms or sequences and omits baseline significance tests by default.","Show stratification factors and key prognostic variables.",family=randomized_trial,major
