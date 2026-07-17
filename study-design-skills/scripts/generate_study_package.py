@@ -90,11 +90,12 @@ def output_table_name(spec):
 
 def p_value_note(spec):
     study = text_norm(spec.get("study_type"))
+    family = (spec.get("route") or {}).get("family")
     if any(term in study for term in ["rct", "randomized", "stepped-wedge"]):
         return "Omitted; baseline significance testing does not validate randomization"
     if any(term in study for term in ["prediction", "prognostic"]):
         return "Omitted; emphasize events, calibration, discrimination, and validation"
-    if any(term in study for term in ["diagnostic", "radiology", "imaging"]):
+    if family == "diagnostic_accuracy" or (not family and any(term in study for term in ["diagnostic", "radiology", "imaging"])):
         return "Omitted from characteristics; accuracy comparisons require paired/design-specific inference"
     if any(term in study for term in ["interrupted time series", "difference-in-differences", "difference in differences"]):
         return "Omitted from characteristics; inference belongs to segmented/panel models"
@@ -303,6 +304,8 @@ def table_columns(spec, data, groups):
         columns.append("SMD")
     if spec.get("include_p_values", False):
         columns.append("P value")
+    if spec.get("include_table_notes", False):
+        columns.append("Data-quality note")
     return columns
 
 
@@ -321,6 +324,26 @@ def build_table(spec, data, groups, variables):
         return columns, rows
     columns = table_columns(spec, data, groups)
     if data is None:
+        precomputed = spec.get("precomputed_table_rows") or []
+        if precomputed:
+            rows = []
+            for source_row in precomputed:
+                row = {column: "" for column in columns}
+                row["Characteristic"] = source_row.get("characteristic", "")
+                if spec.get("include_overall", True):
+                    row[columns[1]] = source_row.get("overall", "")
+                group_values = source_row.get("groups") or {}
+                for group in groups:
+                    column = f"{group['label']} (n={group['n']})"
+                    row[column] = group_values.get(group["label"], group_values.get(str(group["value"]), ""))
+                if "SMD" in columns:
+                    row["SMD"] = source_row.get("smd", "")
+                if "P value" in columns:
+                    row["P value"] = source_row.get("p_value", "")
+                if "Data-quality note" in columns:
+                    row["Data-quality note"] = source_row.get("note", "")
+                rows.append(row)
+            return columns, rows
         rows = []
         for variable in variables:
             row = {column: "" for column in columns}
@@ -506,6 +529,7 @@ def category_benchmark_requirements(categories):
 
 def flow_steps(spec):
     study = text_norm(spec.get("study_type"))
+    layout = (spec.get("route") or {}).get("flow_layout", "")
     counts = spec.get("flow_counts") or {}
 
     def node(label, key):
@@ -575,7 +599,7 @@ def flow_steps(spec):
             node(f"Primary ITT analysis: {primary}", "primary_analysis"),
             node("Secondary analysis sets: " + "; ".join(str(item) for item in secondary), "secondary_analysis"),
         ]
-    if any(term in study for term in ["diagnostic", "radiology", "imaging"]):
+    if layout in {"stard_accuracy", "stard_comparative"} or (not layout and any(term in study for term in ["diagnostic", "radiology", "imaging"])):
         primary = spec.get("primary_objective") or "Primary diagnostic-accuracy or paired-comparison analysis"
         secondary = spec.get("secondary_objectives") or ["Reader, lesion, subgroup, management-impact, and safety analyses"]
         if isinstance(secondary, str):
@@ -642,13 +666,17 @@ def enrollment_flow_html(spec):
         right_head = f'<div class="flow-branch-label">{html.escape(right_label)}</div>' if right_label else ""
         return f'<div class="flow-split" aria-hidden="true"><span></span><span></span></div><div class="flow-branches"><div>{left_head}{left}</div><div>{right_head}{right}</div></div>'
 
+    def multi_branches(items):
+        cards = "".join(f'<div><div class="flow-branch-label">{html.escape(str(label))}</div>{content}</div>' for label, content in items)
+        return f'<div class="flow-multi-branches">{cards}</div>'
+
     def arm_side(main, excluded):
         return f'<div class="flow-arm-row"><div>{main}</div><div class="flow-arm-arrow" aria-hidden="true">&#8594;</div><div>{excluded}</div></div>'
 
     standard = "Study-specific participant flow"
     caption = "Flow of participants or examinations through eligibility, allocation/exposure, attrition, and final analysis."
 
-    if layout == "prisma_review" or any(term in study for term in ["systematic review", "meta-analysis"]):
+    if layout == "prisma_review" or (not layout and any(term in study for term in ["systematic review", "meta-analysis"])):
         standard = "PRISMA 2020"
         body = side(box("Records identified from databases and other sources", "records_identified"), exclusion("Records removed before screening", "records_removed", ["Duplicate records", "Automation or other prespecified removals"]))
         body += down() + side(box("Titles and abstracts screened", "records_screened"), exclusion("Records excluded", "records_excluded", ["Clearly ineligible by title/abstract"]))
@@ -656,7 +684,7 @@ def enrollment_flow_html(spec):
         body += down() + box("Studies included in qualitative synthesis", "included_studies", kind="final")
         body += down() + box("Studies included in each meta-analysis", "meta_analysis_studies", kind="final")
         caption = "PRISMA 2020 flow of records, reports, and studies through identification, screening, eligibility, and synthesis."
-    elif layout in {"consort_trial", "stepped_wedge"} or any(term in study for term in ["rct", "randomized", "trial"]):
+    elif layout in {"consort_trial", "stepped_wedge"} or (not layout and any(term in study for term in ["rct", "randomized", "trial"])):
         standard = "CONSORT-style participant flow"
         crossover = "crossover" in title_text or "within the same" in title_text
         body = side(box("Assessed for eligibility", "source_population"), exclusion("Excluded before randomization", "excluded_before_randomization", ["Did not meet eligibility criteria", "Declined participation", "Other prespecified reasons"]))
@@ -672,7 +700,7 @@ def enrollment_flow_html(spec):
             right = box("Allocated to control", "control_allocated") + down() + box("Received control", "control_received") + down() + arm_side(box("Analyzed in control arm", "control_analyzed", kind="final"), exclusion("Lost/discontinued", "control_lost", ["Lost to follow-up", "Discontinued with reasons"]))
             body += branches(left, right, "Intervention", "Control")
             caption = "CONSORT-style participant flow through enrollment, randomization, allocation, follow-up, and analysis."
-    elif layout in {"stard_accuracy", "stard_comparative"} or any(term in study for term in ["diagnostic", "radiology", "imaging"]):
+    elif layout in {"stard_accuracy", "stard_comparative"} or (not layout and any(term in study for term in ["diagnostic", "radiology", "imaging"])):
         standard = "STARD-style participant and test flow"
         body = side(box("Patients/images assessed for eligibility", "source_population"), exclusion("Excluded before index testing", "excluded_before_index", ["Did not meet eligibility criteria", "Contraindication or unavailable imaging", "Other prespecified reasons"]))
         body += down() + side(box("Index test completed", "index_tests_complete"), exclusion("Index test unavailable or indeterminate", "index_test_excluded", ["Acquisition failure", "Non-evaluable or indeterminate result"]))
@@ -680,13 +708,13 @@ def enrollment_flow_html(spec):
         body += down() + branches(box("Target condition present", "disease_present"), box("Target condition absent", "disease_absent"))
         body += '<div class="flow-join" aria-hidden="true"><span></span><span></span></div>' + box("Included in diagnostic accuracy analysis", "primary_analysis", "Report patient, image/lesion, and reader denominators separately", kind="final")
         caption = "STARD-style flow through eligibility, index testing, reference-standard verification, and diagnostic accuracy analysis."
-    elif layout in {"tripod_development", "tripod_validation"} or any(term in study for term in ["prediction", "prognostic", "survival", "medical ai"]):
+    elif layout in {"tripod_development", "tripod_validation"} or (not layout and any(term in study for term in ["prediction", "prognostic", "survival", "medical ai"])):
         standard = "TRIPOD+AI-style cohort flow"
         body = side(box("Source population/data repository", "source_population"), exclusion("Excluded before prediction time zero", "excluded_before_time_zero", ["Ineligible population or timing", "No usable outcome window", "Invalid or unavailable predictors"]))
         body += down() + box("Modeling cohort at prediction time zero", "modeling_cohort", "Report outcome events and censoring", kind="anchor")
         body += branches(box("Development and internal validation cohort", "development_cohort", "Include events"), box("External/temporal/geographic validation cohort", "external_validation_cohort", "Include events"), "Development", "Validation")
         caption = "TRIPOD+AI-style flow from source data through eligibility, prediction time zero, development, and independent validation."
-    elif layout in {"controlled_time_series", "time_series", "comparative_panel"} or any(term in study for term in ["interrupted time series", "difference-in-differences", "difference in differences"]):
+    elif layout in {"controlled_time_series", "time_series", "comparative_panel"} or (not layout and any(term in study for term in ["interrupted time series", "difference-in-differences", "difference in differences"])):
         standard = "STROBE/RECORD and SQUIRE-style encounter flow"
         body = side(box("Cardiovascular CT examinations in the source ward", "source_population"), exclusion("Excluded before cohort entry", "excluded_before_eligibility", ["Outside the prespecified CT population", "Duplicate/test/invalid injector record", "No linkable examination or outcome record"]))
         body += down() + box("Eligible examinations with stable definitions and denominators", "eligible_at_time_zero", kind="anchor")
@@ -703,6 +731,20 @@ def enrollment_flow_html(spec):
         body += down() + box("Accepted, modified, overridden, or ignored", "clinician_action")
         body += down() + box("Outcome and safety ascertainment complete", "primary_analysis", kind="final")
         caption = "ICAML/DECIDE-AI-style flow from eligible encounters through AI triggering, clinician interaction, downstream action, and outcome ascertainment."
+    elif layout == "strobe_cohort":
+        standard = "STROBE-style participant flow"
+        body = side(box("Assessed for eligibility", "source_population"), exclusion("Excluded before final inclusion", "excluded_before_eligibility", ["Eligibility criteria not met", "Declined participation", "MRI contraindication or structural abnormality", "Non-evaluable image quality"]))
+        body += down() + box("Included cross-sectional study sample", "eligible_at_time_zero", "Report recruitment source and matching/frequency-sampling method", kind="anchor")
+        group_items = []
+        for index, group in enumerate(spec.get("groups") or []):
+            label = group.get("label", f"Group {index + 1}") if isinstance(group, dict) else str(group)
+            detail = group.get("description") if isinstance(group, dict) else None
+            group_items.append((label, box(label, f"group_{index + 1}", detail)))
+        if group_items:
+            body += down() + multi_branches(group_items)
+        body += down() + side(box("MRI, clinical assessment, and prespecified quality control complete", "mri_complete"), exclusion("Excluded after acquisition or data linkage", "mri_excluded", ["Severe motion or processing failure", "Missing primary regional measurement", "Missing prespecified clinical linkage"]))
+        body += down() + box("Included in primary cross-sectional analysis", "primary_analysis", "Report group, MRI, correlation, and exploratory ROC denominators separately", kind="final")
+        caption = "STROBE-style flow through recruitment, eligibility, cross-sectional group assignment, MRI quality control, and analysis."
     else:
         standard = "STROBE/RECORD-style participant flow"
         body = side(box("Source population/data repository", "source_population"), exclusion("Excluded before eligibility", "excluded_before_eligibility", ["Outside sampling frame", "Duplicate or invalid record"]))
@@ -996,7 +1038,7 @@ main{{max-width:1180px;margin:0 auto;padding:28px 24px 60px}} h2{{font-size:21px
 	.flow-count{{display:block;color:#0b62c4;font-weight:700;margin-top:3px}} .flow-box.final .flow-count{{color:#fff}} .flow-detail{{display:block;font-size:12px;color:var(--muted);margin-top:4px}} .flow-box.final .flow-detail{{color:#e0ecee}}
 	.flow-down{{height:34px;text-align:center;font-size:29px;line-height:34px;color:#285b69;font-weight:400}} .flow-row{{display:grid;grid-template-columns:minmax(0,1fr) 52px minmax(0,1fr);align-items:center}} .flow-side-arrow{{font-size:29px;text-align:center;color:#285b69}}
 	.flow-arm-row{{display:grid;grid-template-columns:minmax(0,1fr) 24px minmax(0,1fr);align-items:center}} .flow-arm-row .flow-box{{padding:9px;min-height:92px;font-size:12px}} .flow-arm-row .flow-box.exclusion ul{{font-size:10px;padding-left:14px}} .flow-arm-arrow{{text-align:center;color:#285b69;font-size:20px}}
-	.flow-branches{{display:grid;grid-template-columns:1fr 1fr;gap:48px}} .flow-branch-label{{text-align:center;font-size:12px;font-weight:700;color:var(--teal);text-transform:uppercase;margin:0 0 7px}} .flow-split,.flow-join{{height:42px;position:relative;margin:0 24%}}
+	.flow-branches{{display:grid;grid-template-columns:1fr 1fr;gap:48px}} .flow-multi-branches{{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:24px;margin:18px 0 8px}} .flow-branch-label{{text-align:center;font-size:12px;font-weight:700;color:var(--teal);text-transform:uppercase;margin:0 0 7px}} .flow-split,.flow-join{{height:42px;position:relative;margin:0 24%}}
 	.flow-split::before{{content:"";position:absolute;left:0;right:0;top:20px;border-top:2px solid #285b69}} .flow-split::after{{content:"";position:absolute;left:50%;top:0;height:21px;border-left:2px solid #285b69}} .flow-split span::before{{content:"";position:absolute;top:20px;height:15px;border-left:2px solid #285b69}} .flow-split span::after{{content:"";position:absolute;top:33px;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #285b69}} .flow-split span:first-child::before{{left:0}} .flow-split span:last-child::before{{right:0}} .flow-split span:first-child::after{{left:-5px}} .flow-split span:last-child::after{{right:-5px}}
 	.flow-join::before{{content:"";position:absolute;left:0;right:0;top:0;border-top:2px solid #285b69}} .flow-join::after{{content:"";position:absolute;left:calc(50% - 5px);top:22px;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #285b69}} .flow-join span:first-child::before,.flow-join span:last-child::before{{content:"";position:absolute;top:0;height:21px;border-left:2px solid #285b69}} .flow-join span:first-child::before{{left:0}} .flow-join span:last-child::before{{right:0}} .flow-join span:first-child::after{{content:"";position:absolute;left:50%;top:0;height:23px;border-left:2px solid #285b69}} figcaption{{max-width:900px;margin:15px auto 0;color:var(--muted);font-size:12px}}
 	.warning{{border-left:4px solid var(--warn)}} .fine{{color:var(--muted);font-size:12px}} ul,ol{{padding-left:20px}} @media print{{header{{padding:24px}} main{{padding:16px}} .table-wrap{{overflow:visible}}}}
@@ -1005,7 +1047,7 @@ main{{max-width:1180px;margin:0 auto;padding:28px 24px 60px}} h2{{font-size:21px
 	  .flow-canvas{{min-width:0;padding:4px 0 8px}}
 	  .flow-row,.flow-arm-row{{grid-template-columns:1fr}}
 	  .flow-side-arrow,.flow-arm-arrow{{height:30px;line-height:30px;transform:rotate(90deg)}}
-	  .flow-branches{{grid-template-columns:1fr;gap:28px}}
+	  .flow-branches,.flow-multi-branches{{grid-template-columns:1fr;gap:28px}}
 	  .flow-split,.flow-join{{display:none}}
 	  .flow-arm-row .flow-box{{min-height:66px;font-size:12px}}
 	  .flow-branch-label{{margin-top:8px}}

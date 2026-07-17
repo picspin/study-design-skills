@@ -4,6 +4,8 @@
 import math
 from statistics import NormalDist
 
+import mpmath as mp
+
 
 def _z(probability):
     return NormalDist().inv_cdf(probability)
@@ -133,11 +135,107 @@ def survival_events(cfg):
     )
 
 
+def _f_cdf(value, df1, df2):
+    z = df1 * value / (df1 * value + df2)
+    return mp.betainc(df1 / 2, df2 / 2, 0, z, regularized=True)
+
+
+def _f_critical(alpha, df1, df2):
+    target = 1 - alpha
+    low = mp.mpf("0")
+    high = mp.mpf("10")
+    while _f_cdf(high, df1, df2) < target:
+        high *= 2
+    for _ in range(100):
+        middle = (low + high) / 2
+        if _f_cdf(middle, df1, df2) < target:
+            low = middle
+        else:
+            high = middle
+    return (low + high) / 2
+
+
+def _noncentral_f_cdf(value, df1, df2, noncentrality):
+    z = df1 * value / (df1 * value + df2)
+    mean = mp.mpf(noncentrality) / 2
+    weight = mp.exp(-mean)
+    total = mp.mpf("0")
+    for index in range(1000):
+        term = weight * mp.betainc(df1 / 2 + index, df2 / 2, 0, z, regularized=True)
+        total += term
+        if index > mean + 20 and abs(term) < mp.mpf("1e-20"):
+            break
+        weight *= mean / (index + 1)
+    return total
+
+
+def _anova_power(total_n, groups, effect_size, alpha):
+    df1 = groups - 1
+    df2 = total_n - groups
+    critical = _f_critical(alpha, df1, df2)
+    noncentrality = effect_size**2 * total_n
+    return float(1 - _noncentral_f_cdf(critical, df1, df2, noncentrality))
+
+
+def one_way_anova(cfg):
+    effect_size = float(cfg["effect_size_f"])
+    groups = int(cfg.get("groups", 3))
+    alpha = float(cfg.get("alpha", 0.05))
+    power = float(cfg.get("power", 0.80))
+    loss = float(cfg.get("loss_fraction", 0.0))
+    if effect_size <= 0 or groups < 2 or not 0 < alpha < 1 or not 0 < power < 1:
+        raise ValueError("effect_size_f must be positive; groups >=2; alpha and power must be in (0,1)")
+    low = groups + 1
+    high = max(low + 1, groups * 10)
+    while _anova_power(high, groups, effect_size, alpha) < power:
+        high *= 2
+        if high > 100000:
+            raise ValueError("required sample exceeds 100000; check the effect-size assumptions")
+    while low < high:
+        middle = (low + high) // 2
+        if _anova_power(middle, groups, effect_size, alpha) >= power:
+            high = middle
+        else:
+            low = middle + 1
+    analyzable = low
+    recruited = _inflate(analyzable, loss)
+    return _result(
+        "Balanced one-way omnibus ANOVA using Cohen f",
+        {"effect_size_f": effect_size, "groups": groups, "alpha": alpha, "power": power, "loss_fraction": loss, "assumption_source": cfg.get("assumption_source", "Not supplied")},
+        analyzable,
+        recruited,
+        "participants total",
+        "Power=P{F_(k-1,N-k,lambda=f^2*N)>F_critical}; solve minimum integer N",
+        ["Use this as a planning approximation when the final analysis is covariate-adjusted or robust.", "Inflate further for materially unequal group allocation, multiple primary regions, or model complexity; do not report post-hoc observed power."],
+    )
+
+
+def correlation(cfg):
+    rho = abs(float(cfg["correlation"])); alpha = float(cfg.get("alpha", 0.05)); power = float(cfg.get("power", 0.80))
+    loss = float(cfg.get("loss_fraction", 0.0)); vif = float(cfg.get("variance_inflation_factor", 1.0))
+    if not 0 < rho < 1 or not 0 < alpha < 1 or not 0 < power < 1 or vif < 1:
+        raise ValueError("correlation, alpha and power must be in (0,1); variance_inflation_factor must be >=1")
+    base = ((_z(1 - alpha / 2) + _z(power)) / math.atanh(rho)) ** 2 + 3
+    analyzable = math.ceil(base * vif)
+    recruited = _inflate(analyzable, loss)
+    return _result(
+        "Two-sided correlation using Fisher z approximation",
+        {"correlation": rho, "alpha": alpha, "power": power, "variance_inflation_factor": vif, "loss_fraction": loss, "assumption_source": cfg.get("assumption_source", "Not supplied")},
+        analyzable,
+        recruited,
+        "participants with complete outcome data",
+        "N=[(z1-alpha/2+zpower)/atanh(rho)]^2+3, multiplied by the prespecified variance-inflation factor",
+        ["For partial correlation, justify the variance-inflation factor from anticipated covariate R-squared.", "Use a multiplicity-adjusted alpha when several regions or biomarkers are confirmatory."],
+    )
+
+
 METHODS = {
     "parallel_proportions": parallel_proportions,
     "paired_binary": paired_binary,
     "diagnostic_precision": diagnostic_precision,
     "survival_events": survival_events,
+    "one_way_anova": one_way_anova,
+    "correlation": correlation,
 }
 
 

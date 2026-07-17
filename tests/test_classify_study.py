@@ -167,6 +167,24 @@ class StudyTriageTests(unittest.TestCase):
         self.assertGreater(result["recruited_n"], result["analyzable_n"])
         self.assertGreater(result["analyzable_n"], 350)
 
+    def test_one_way_anova_sample_size_for_three_groups(self):
+        result = SAMPLE_MODULE.estimate_sample_size({"sample_size": {
+            "method": "one_way_anova", "effect_size_f": 0.25, "groups": 3,
+            "alpha": 0.05, "power": 0.80, "loss_fraction": 0.10,
+        }})
+        self.assertEqual(result["status"], "estimated")
+        self.assertEqual(result["analyzable_n"], 158)
+        self.assertEqual(result["recruited_n"], 176)
+
+    def test_correlation_sample_size_supports_multiplicity_alpha(self):
+        result = SAMPLE_MODULE.estimate_sample_size({"sample_size": {
+            "method": "correlation", "correlation": 0.30, "alpha": 0.01,
+            "power": 0.80, "loss_fraction": 0.10,
+        }})
+        self.assertEqual(result["status"], "estimated")
+        self.assertEqual(result["analyzable_n"], 125)
+        self.assertEqual(result["recruited_n"], 139)
+
     def test_paired_sample_size_requires_directional_discordance(self):
         result = SAMPLE_MODULE.estimate_sample_size({"sample_size": {
             "method": "paired_binary",
@@ -317,6 +335,94 @@ class StudyTriageTests(unittest.TestCase):
             canonical = json.loads(next(Path(temp_dir).glob("*-study-package.json")).read_text(encoding="utf-8"))
             self.assertEqual(canonical["schema_version"], "1.0")
             self.assertEqual(canonical["route"]["family"], "prediction")
+
+    def test_precomputed_table_rows_render_without_patient_level_data(self):
+        root = Path(__file__).parents[1]
+        spec = {
+            "study_title": "Cross-sectional imaging biomarker study",
+            "study_type": "Cross-sectional observational study",
+            "confirmed_design": "descriptive_observational",
+            "groups": [{"label": "Healthy", "n": 44}, {"label": "CKD", "n": 77}],
+            "include_overall": False,
+            "include_table_notes": True,
+            "precomputed_table_rows": [{
+                "characteristic": "Age, years",
+                "groups": {"Healthy": "42.0 (12.0)", "CKD": "48.0 (11.0)"},
+                "note": "Aggregate values supplied by investigators",
+            }],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            spec_path = Path(temp_dir) / "spec.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            subprocess.run(
+                ["python3", str(root / "study-design-skills/scripts/design_study.py"), str(spec_path), "--out-dir", temp_dir, "--formats", "csv"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            table = next(Path(temp_dir).glob("*-table1.csv")).read_text(encoding="utf-8-sig")
+            self.assertIn("Healthy (n=44)", table)
+            self.assertIn("42.0 (12.0)", table)
+            self.assertIn("Data-quality note", table)
+
+    def test_confirmed_descriptive_imaging_route_uses_strobe_flow(self):
+        root = Path(__file__).parents[1]
+        spec = {
+            "study_title": "Cross-sectional imaging biomarker study",
+            "study_type": "Cross-sectional observational neuroimaging study",
+            "confirmed_design": "descriptive_observational",
+            "primary_objective": "Compare a continuous imaging biomarker across three groups",
+            "population": "Adults undergoing research MRI",
+            "groups": [{"label": "Control", "n": 40}, {"label": "Group A", "n": 30}, {"label": "Group B", "n": 30}],
+            "variables": [{"name": "age", "label": "Age", "type": "continuous"}],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            spec_path = Path(temp_dir) / "spec.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            subprocess.run(
+                ["python3", str(root / "study-design-skills/scripts/generate_study_package.py"), str(spec_path), "--out-dir", temp_dir, "--formats", "html,md"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            report = next(Path(temp_dir).glob("*-report.html")).read_text(encoding="utf-8")
+            memo = next(Path(temp_dir).glob("*-memo.md")).read_text(encoding="utf-8")
+            self.assertIn("STROBE-style flow", report)
+            self.assertNotIn("STARD-style participant and test flow", report)
+            self.assertIn("Included cross-sectional sample", memo)
+            self.assertNotIn("Reference standard performed", memo)
+
+    def test_completed_aggregate_package_penalizes_missing_screening_and_imaging_qc(self):
+        root = Path(__file__).parents[1]
+        spec = {
+            "study_title": "Completed cross-sectional imaging biomarker study",
+            "study_type": "Cross-sectional observational neuroimaging study",
+            "confirmed_design": "descriptive_observational",
+            "clinical_area": "radiology",
+            "target_jcr_category": "RADIOLOGY, NUCLEAR MEDICINE & MEDICAL IMAGING",
+            "primary_objective": "Compare a continuous imaging biomarker",
+            "population": "Adults undergoing research MRI",
+            "groups": [{"label": "Control", "n": 40}, {"label": "CKD", "n": 60}],
+            "variables": [{"name": "hypertension", "label": "Hypertension", "type": "categorical"}],
+            "include_overall": False,
+            "flow_counts": {"primary_analysis": 100},
+            "precomputed_table_rows": [
+                {"characteristic": "Hypertension", "groups": {"Control": "Not collected", "CKD": "40 (66.7)"}},
+                {"characteristic": "Scanner/acquisition and motion QC", "groups": {"Control": "Not reported", "CKD": "Not reported"}},
+            ],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            spec_path = Path(temp_dir) / "spec.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            subprocess.run(
+                ["python3", str(root / "study-design-skills/scripts/generate_study_package.py"), str(spec_path), "--out-dir", temp_dir, "--formats", "html"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            report = next(Path(temp_dir).glob("*-report.html")).read_text(encoding="utf-8")
+            self.assertIn("lacks the assessed/screened denominator", report)
+            self.assertIn("imaging-QC details are not reported", report)
 
     def test_systematic_review_package_uses_study_characteristics(self):
         root = Path(__file__).parents[1]

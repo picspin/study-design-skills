@@ -5,6 +5,8 @@ Sample size belongs to the confirmed primary estimand, not merely to the broad s
 ## Supported First-Pass Methods
 
 - `parallel_proportions`: two independent event rates in a parallel RCT or comparative cohort. Required: `control_event_rate`, `intervention_event_rate`; optional: `alpha`, `power`, `allocation_ratio`, `loss_fraction`.
+- `one_way_anova`: balanced omnibus comparison across independent groups. Required: `effect_size_f`; optional: `groups`, `alpha`, `power`, `loss_fraction`. Treat as a planning approximation for adjusted or robust models.
+- `correlation`: two-sided correlation or partial-correlation planning using Fisher z. Required: `correlation`; optional: `alpha`, `power`, `variance_inflation_factor`, `loss_fraction`.
 - `paired_binary`: directional discordant probabilities for a McNemar-style paired comparison. Required: `discordant_control_only` (`p01`) and `discordant_intervention_only` (`p10`); optional: `alpha`, `power`, `incomplete_pair_fraction`.
 - `diagnostic_precision`: confidence-interval precision for sensitivity and specificity. Required: `sensitivity`, `specificity`, `prevalence`, `sensitivity_half_width`, `specificity_half_width`; optional: `alpha`, `uninterpretable_or_unverified_fraction`.
 - `survival_events`: Schoenfeld event method. Required: `hazard_ratio`, `event_fraction`; optional: `alpha`, `power`, `intervention_fraction`, `loss_fraction`.
