@@ -31,6 +31,10 @@ EXTERNAL_SCRIPT = SCRIPT.parent / "external_evidence.py"
 EXTERNAL_SPEC = importlib.util.spec_from_file_location("external_evidence", EXTERNAL_SCRIPT)
 EXTERNAL_MODULE = importlib.util.module_from_spec(EXTERNAL_SPEC)
 EXTERNAL_SPEC.loader.exec_module(EXTERNAL_MODULE)
+DESIGN_SCRIPT = SCRIPT.parent / "design_study.py"
+DESIGN_SPEC = importlib.util.spec_from_file_location("design_study", DESIGN_SCRIPT)
+DESIGN_MODULE = importlib.util.module_from_spec(DESIGN_SPEC)
+DESIGN_SPEC.loader.exec_module(DESIGN_MODULE)
 
 
 class StudyTriageTests(unittest.TestCase):
@@ -49,6 +53,21 @@ class StudyTriageTests(unittest.TestCase):
         self.assertEqual(result["route"]["flow_layout"], "consort_trial")
         self.assertEqual(result["content_policy"]["table_cell_max_words"], 25)
         self.assertEqual(result["external_evidence"]["activation"], "disabled")
+
+    def test_randomized_diagnostic_management_trial_uses_rct_route(self):
+        spec = COMPILER_MODULE.compile_spec({
+            "study_title": "Randomized diagnostic-management strategy trial",
+            "study_type": "Pragmatic randomized diagnostic-management strategy trial",
+            "confirmed_design": "randomized_controlled_trial",
+            "primary_objective": "Compare management-plan change",
+            "population": "Eligible adults",
+            "time_zero": "randomization",
+            "groups": [{"label": "Strategy A"}, {"label": "Strategy B"}],
+            "reference_standard": "Composite lesion reference standard",
+        })
+        self.assertIn("CONSORT", DESIGN_MODULE.infer_guideline(spec))
+        self.assertNotIn("one-gate", " ".join(DESIGN_MODULE.infer_design_warnings(spec)))
+        self.assertIn("randomized allocation", " ".join(DESIGN_MODULE.render_matching(spec)))
 
     def test_external_evidence_is_default_disabled(self):
         self.assertEqual(EXTERNAL_MODULE.activation_decision(), {"activate": False, "reason": "default_disabled"})

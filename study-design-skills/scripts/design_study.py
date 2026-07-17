@@ -63,7 +63,29 @@ def normalize(text):
     return str(text or "").strip().lower()
 
 
-def infer_guideline(study_type):
+def route_family(spec):
+    return normalize((spec.get("route") or {}).get("family")) if isinstance(spec, dict) else ""
+
+
+def infer_guideline(spec_or_study_type):
+    if isinstance(spec_or_study_type, dict):
+        family = route_family(spec_or_study_type)
+        routed = {
+            "randomized_trial": "CONSORT 2025; SPIRIT 2025 for protocols",
+            "time_series_qi": "SQUIRE 2.0 plus TREND; RECORD for routinely collected data",
+            "causal_observational": "STROBE plus RECORD when routinely collected data are used",
+            "descriptive_observational": "STROBE",
+            "diagnostic_accuracy": "STARD",
+            "prediction": "TRIPOD or TRIPOD+AI",
+            "evidence_synthesis": "PRISMA or the applicable evidence-synthesis extension",
+            "qualitative": "SRQR or COREQ",
+            "economic": "CHEERS",
+        }
+        if family in routed:
+            return routed[family]
+        study_type = spec_or_study_type.get("study_type")
+    else:
+        study_type = spec_or_study_type
     key = normalize(study_type)
     for pattern, guideline in GUIDELINES.items():
         if pattern in key:
@@ -117,9 +139,10 @@ def infer_variables(spec):
 
 def infer_design_warnings(spec):
     study_type = normalize(spec.get("study_type", ""))
+    family = route_family(spec)
     warnings = []
-    is_causal_observational = any(term in study_type for term in ["causal", "comparative effectiveness", "target trial", "rwe", "real-world evidence"])
-    is_its = any(term in study_type for term in ["interrupted time series", "difference-in-differences", "difference in differences"])
+    is_causal_observational = family == "causal_observational" or (not family and any(term in study_type for term in ["causal", "comparative effectiveness", "target trial", "rwe", "real-world evidence"]))
+    is_its = family == "time_series_qi" or (not family and any(term in study_type for term in ["interrupted time series", "difference-in-differences", "difference in differences"]))
     if is_causal_observational:
         if not spec.get("time_zero"):
             warnings.append("Define time zero/index date before finalizing Table 1 or flowchart denominators.")
@@ -133,13 +156,13 @@ def infer_design_warnings(spec):
     if any(term in study_type for term in ["clinical ai", "ai healthcare", "ai clinical quality", "cdss", "triage", "workflow", "quality improvement", "diagnostic efficiency", "ai-assisted diagnosis"]):
         warnings.append("Use ICAML-style workflow evaluation when the primary question is implementation, quality, triage, CDSS, or human-AI workflow impact rather than model development.")
         warnings.append("Track AI trigger, output generation, clinician visibility, acceptance/override, downstream action, safety ascertainment, adoption, and fairness strata.")
-    if any(term in study_type for term in ["diagnostic", "radiology", "imaging"]):
+    if family == "diagnostic_accuracy" or (not family and any(term in study_type for term in ["diagnostic", "radiology", "imaging"])):
         warnings.append("Declare one-gate versus two-gate design and audit spectrum, verification, and reference-standard bias.")
         warnings.append("Separate patient-level, lesion-level, image-level, and reader-level denominators when applicable.")
-    if any(term in study_type for term in ["prediction", "prognostic", "medical ai", "survival"]):
+    if family == "prediction" or (not family and any(term in study_type for term in ["prediction", "prognostic", "medical ai", "survival"])):
         warnings.append("Define prediction time zero, outcome horizon, event count, censoring, and data split logic.")
         warnings.append("Plan discrimination, calibration, C-index/time-dependent C-index, and external validation where applicable.")
-    if any(term in study_type for term in ["rct", "randomized", "clinical trial"]):
+    if family == "randomized_trial" or (not family and any(term in study_type for term in ["rct", "randomized", "clinical trial"])):
         warnings.append("Use randomized arms and avoid baseline p values unless the SAP or journal explicitly requires them.")
         warnings.append("CONSORT flow must track randomized, allocated, followed-up, discontinued, and analyzed participants by arm.")
     return warnings
@@ -256,17 +279,20 @@ flowchart TD
 
 def render_matching(spec):
     study_type = normalize(spec.get("study_type", ""))
-    if any(term in study_type for term in ["prediction", "prognostic"]):
+    family = route_family(spec)
+    if family == "randomized_trial":
+        return ["- Use randomized allocation, concealment, prespecified estimand, intention-to-treat analysis, and cluster/period effects when applicable; do not replace randomization with PSM."]
+    if family == "prediction" or (not family and any(term in study_type for term in ["prediction", "prognostic"])):
         return [
             "- Propensity-score matching is not a default prediction-model bias correction.",
             "- Use bootstrap/repeated resampling for optimism, shrinkage or penalization, calibration, discrimination, clinical utility, and temporal/geographic/site external validation.",
         ]
-    if any(term in study_type for term in ["diagnostic", "radiology", "imaging"]):
+    if family == "diagnostic_accuracy" or (not family and any(term in study_type for term in ["diagnostic", "radiology", "imaging"])):
         return [
             "- Do not use PSM as a substitute for representative one-gate sampling or verification-bias control.",
             "- Prefer consecutive/random enrollment, blinded index/reference interpretation, complete verification, prespecified thresholds, and paired/randomized comparison for multiple tests.",
         ]
-    if any(term in study_type for term in ["interrupted time series", "difference-in-differences", "difference in differences"]):
+    if family == "time_series_qi" or (not family and any(term in study_type for term in ["interrupted time series", "difference-in-differences", "difference in differences"])):
         return [
             "- PSM is not the primary design control. Preserve repeated time points and intervention timing.",
             "- Use segmented regression or panel/event-study models with autocorrelation/seasonality, baseline trends, concurrent controls, cluster inference, and co-intervention checks as applicable.",
@@ -337,22 +363,23 @@ def render_missing_and_sensitivity(spec):
 
 def score_study_design(spec):
     study_type = normalize(spec.get("study_type", ""))
+    family = route_family(spec)
     variables = spec.get("variables") or []
     groups = spec.get("groups") or []
     notes = spec.get("notes") or []
     if isinstance(notes, str):
         notes = [notes]
 
-    is_rwe = any(term in study_type for term in ["rwe", "real-world evidence", "comparative effectiveness", "target trial", "observational causal"])
-    is_its = any(term in study_type for term in ["interrupted time series", "difference-in-differences", "difference in differences"])
+    is_rwe = family == "causal_observational" or (not family and any(term in study_type for term in ["rwe", "real-world evidence", "comparative effectiveness", "target trial", "observational causal"]))
+    is_its = family == "time_series_qi" or (not family and any(term in study_type for term in ["interrupted time series", "difference-in-differences", "difference in differences"]))
     is_ai_workflow = any(term in study_type for term in [
         "icaml", "clinical ai", "ai healthcare", "ai clinical quality", "cdss",
         "triage", "workflow", "quality improvement", "diagnostic efficiency",
         "ai-assisted diagnosis",
     ])
-    is_diagnostic = any(term in study_type for term in ["diagnostic", "radiology", "imaging"])
-    is_prediction = any(term in study_type for term in ["prediction", "prognostic", "medical ai", "survival"])
-    is_rct = any(term in study_type for term in ["rct", "randomized", "clinical trial"])
+    is_diagnostic = family == "diagnostic_accuracy" or (not family and any(term in study_type for term in ["diagnostic", "radiology", "imaging"]))
+    is_prediction = family == "prediction" or (not family and any(term in study_type for term in ["prediction", "prognostic", "medical ai", "survival"]))
+    is_rct = family == "randomized_trial" or (not family and any(term in study_type for term in ["rct", "randomized", "clinical trial"]))
 
     design = 0.8
     if spec.get("study_type"):
@@ -425,7 +452,7 @@ def score_study_design(spec):
     stats = min(stats, 2.0)
 
     guideline = 0.45
-    if infer_guideline(spec.get("study_type")):
+    if infer_guideline(spec):
         guideline += 0.25
     if notes:
         guideline += 0.15
@@ -587,12 +614,15 @@ def markdown_table(columns, rows):
 
 def render_footnote(spec):
     study_type = normalize(spec.get("study_type", ""))
+    family = route_family(spec)
     base = "Data are shown as mean (SD), median (IQR), or No. (%) unless otherwise indicated. Define denominator and missingness rules."
-    if any(term in study_type for term in ["prediction", "prognostic"]):
+    if family == "randomized_trial":
+        return base + " Define randomized analysis set, cluster/sequence when applicable, stratification factors, protocol deviations, estimand, and harms population. Baseline significance tests are not used to validate randomization."
+    if family == "prediction" or (not family and any(term in study_type for term in ["prediction", "prognostic"])):
         return base + " Define prediction time zero, outcome events/horizon, predictor timing, imputation, clustering, dataset partitions, internal validation, and external validation."
-    if any(term in study_type for term in ["diagnostic", "radiology", "imaging"]):
+    if family == "diagnostic_accuracy" or (not family and any(term in study_type for term in ["diagnostic", "radiology", "imaging"])):
         return base + " Define patient/image/lesion units, sampling pathway, index tests, reference standard, blinding, paired completeness, indeterminate results, thresholds, and reader/device structure."
-    if any(term in study_type for term in ["interrupted time series", "difference-in-differences", "difference in differences"]):
+    if family == "time_series_qi" or (not family and any(term in study_type for term in ["interrupted time series", "difference-in-differences", "difference in differences"])):
         return base + " Define series/cluster, observation frequency, repeated pre/post periods, intervention point, ramp-up, outcome denominator/offset, baseline trend, seasonality, autocorrelation, and concurrent control."
     if any(term in study_type for term in ["rct", "randomized", "stepped-wedge"]):
         return base + " Define randomized analysis set, cluster/sequence when applicable, stratification factors, protocol deviations, estimand, and harms population. Baseline significance tests are not used to validate randomization."
@@ -605,7 +635,7 @@ def render_footnote(spec):
 
 def render(spec):
     study_type = spec.get("study_type", "unspecified study")
-    guideline = infer_guideline(study_type)
+    guideline = infer_guideline(spec)
     journal = spec.get("journal", "unspecified journal")
     population = spec.get("population", "study population")
     columns = infer_columns(spec)

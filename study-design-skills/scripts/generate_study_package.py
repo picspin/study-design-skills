@@ -782,7 +782,7 @@ def write_xlsx(path, spec, columns, rows, journals, categories, scoring):
     table_sheet.cell(1, 1).alignment = Alignment(vertical="center", wrap_text=True)
     table_sheet.row_dimensions[1].height = 42 if len(title) > 75 else 28
     table_sheet.merge_cells(start_row=2, start_column=1, end_row=2, end_column=len(columns))
-    subtitle = f"{spec.get('study_type', 'Study')} | {infer_guideline(spec.get('study_type'))}"
+    subtitle = f"{spec.get('study_type', 'Study')} | {infer_guideline(spec)}"
     table_sheet.cell(2, 1, subtitle)
     table_sheet.cell(2, 1).font = Font(name="Arial", size=9, color=gray)
     table_sheet.cell(2, 1).alignment = Alignment(vertical="center", wrap_text=True)
@@ -889,7 +889,7 @@ def write_xlsx(path, spec, columns, rows, journals, categories, scoring):
     notes = [
         ["Confirmed design", spec.get("confirmed_design", "Not triaged")],
         ["Study type", spec.get("study_type", "")],
-        ["Guideline", infer_guideline(spec.get("study_type"))],
+        ["Guideline", infer_guideline(spec)],
         ["Guideline stack", "; ".join(spec.get("guideline_stack", []))],
         ["Bias/appraisal tools", "; ".join(spec.get("bias_tools", []))],
         ["Analysis/validation methods", "; ".join(spec.get("analysis_methods", []))],
@@ -1000,11 +1000,20 @@ main{{max-width:1180px;margin:0 auto;padding:28px 24px 60px}} h2{{font-size:21px
 	.flow-split::before{{content:"";position:absolute;left:0;right:0;top:20px;border-top:2px solid #285b69}} .flow-split::after{{content:"";position:absolute;left:50%;top:0;height:21px;border-left:2px solid #285b69}} .flow-split span::before{{content:"";position:absolute;top:20px;height:15px;border-left:2px solid #285b69}} .flow-split span::after{{content:"";position:absolute;top:33px;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #285b69}} .flow-split span:first-child::before{{left:0}} .flow-split span:last-child::before{{right:0}} .flow-split span:first-child::after{{left:-5px}} .flow-split span:last-child::after{{right:-5px}}
 	.flow-join::before{{content:"";position:absolute;left:0;right:0;top:0;border-top:2px solid #285b69}} .flow-join::after{{content:"";position:absolute;left:calc(50% - 5px);top:22px;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #285b69}} .flow-join span:first-child::before,.flow-join span:last-child::before{{content:"";position:absolute;top:0;height:21px;border-left:2px solid #285b69}} .flow-join span:first-child::before{{left:0}} .flow-join span:last-child::before{{right:0}} .flow-join span:first-child::after{{content:"";position:absolute;left:50%;top:0;height:23px;border-left:2px solid #285b69}} figcaption{{max-width:900px;margin:15px auto 0;color:var(--muted);font-size:12px}}
 	.warning{{border-left:4px solid var(--warn)}} .fine{{color:var(--muted);font-size:12px}} ul,ol{{padding-left:20px}} @media print{{header{{padding:24px}} main{{padding:16px}} .table-wrap{{overflow:visible}}}}
-	@media (max-width:720px){{.enrollment-figure{{padding:12px}} .flow-canvas{{transform-origin:top left}}}}
+	@media (max-width:720px){{
+	  .enrollment-figure{{padding:12px;overflow:visible}}
+	  .flow-canvas{{min-width:0;padding:4px 0 8px}}
+	  .flow-row,.flow-arm-row{{grid-template-columns:1fr}}
+	  .flow-side-arrow,.flow-arm-arrow{{height:30px;line-height:30px;transform:rotate(90deg)}}
+	  .flow-branches{{grid-template-columns:1fr;gap:28px}}
+	  .flow-split,.flow-join{{display:none}}
+	  .flow-arm-row .flow-box{{min-height:66px;font-size:12px}}
+	  .flow-branch-label{{margin-top:8px}}
+	}}
 </style></head><body>
 <header><h1>{html.escape(spec.get('study_title') or 'Study Design and Table 1 Report')}</h1><p>{html.escape(spec.get('population', 'Study population'))}</p></header>
 <main>
-<section class="meta"><div class="panel"><div class="label">Study design</div><strong>{html.escape(str(spec.get('study_type','Unspecified')))}</strong></div><div class="panel"><div class="label">Guideline</div><strong>{html.escape(infer_guideline(spec.get('study_type')))}</strong></div><div class="panel"><div class="label">Time zero</div><strong>{html.escape(str(spec.get('time_zero','Not specified')))}</strong></div><div class="panel"><div class="label">Target categories</div><strong>{html.escape('; '.join(categories))}</strong></div></section>
+<section class="meta"><div class="panel"><div class="label">Study design</div><strong>{html.escape(str(spec.get('study_type','Unspecified')))}</strong></div><div class="panel"><div class="label">Guideline</div><strong>{html.escape(infer_guideline(spec))}</strong></div><div class="panel"><div class="label">Time zero</div><strong>{html.escape(str(spec.get('time_zero','Not specified')))}</strong></div><div class="panel"><div class="label">Target categories</div><strong>{html.escape('; '.join(categories))}</strong></div></section>
 <h2>{html.escape(output_table_name(spec))}</h2>{html_table(columns, rows)}<p class="fine">The characteristics object, denominator rules, balance metrics, and inferential columns are selected from the confirmed study design.</p>
 	<h2>Enrollment and analysis flow</h2>{enrollment_figure}
 <h2>Sample size estimation</h2>{sample_html}<div class="panel"><strong>Interpretation caveats</strong><ul>{sample_caveats}</ul></div>
