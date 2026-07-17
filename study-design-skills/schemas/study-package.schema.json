@@ -58,6 +58,18 @@
         "registry_version": {"type": "string"},
         "source_format": {"type": "string"}
       }
+    },
+    "external_evidence": {
+      "type": "object",
+      "properties": {
+        "activation": {"enum": ["disabled", "explicit_request", "classification_context_gap"]},
+        "allow_external_context": {"type": "boolean"},
+        "requested_providers": {
+          "type": "array",
+          "items": {"enum": ["springer_meta", "springer_open_access", "scopus", "clinical_trials", "pubmed", "nih_reporter"]}
+        },
+        "retrievals": {"type": "array"}
+      }
     }
   },
   "additionalProperties": true

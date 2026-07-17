@@ -87,6 +87,10 @@ def validate_spec(source, strict=False):
             if text_units(reason) > 25:
                 add_issue(issues, "density_flow", f"flow_exclusions.{key}[{index}]", "Flowchart reason exceeds 25 readable units; shorten the node and move detail to the caption.")
 
+    external = spec.get("external_evidence") or {}
+    if external.get("retrievals") and external.get("activation") == "disabled":
+        add_issue(issues, "external_evidence_policy", "external_evidence.activation", "External retrievals are present while external evidence is disabled.", "error")
+
     if spec.get("include_p_values") and route["family"] == "randomized_trial":
         add_issue(issues, "method_mismatch", "include_p_values", "Randomized-trial Table 1 should not use baseline p values by default.", "error" if strict else "warning")
     if spec.get("matching") and route["family"] in {"randomized_trial", "prediction", "diagnostic_accuracy", "time_series_qi"}:

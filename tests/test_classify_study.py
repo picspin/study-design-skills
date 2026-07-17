@@ -3,6 +3,7 @@ import json
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 
@@ -26,6 +27,10 @@ RUBRIC_SCRIPT = SCRIPT.parent / "select_rubrics.py"
 RUBRIC_SPEC = importlib.util.spec_from_file_location("select_rubrics", RUBRIC_SCRIPT)
 RUBRIC_MODULE = importlib.util.module_from_spec(RUBRIC_SPEC)
 RUBRIC_SPEC.loader.exec_module(RUBRIC_MODULE)
+EXTERNAL_SCRIPT = SCRIPT.parent / "external_evidence.py"
+EXTERNAL_SPEC = importlib.util.spec_from_file_location("external_evidence", EXTERNAL_SCRIPT)
+EXTERNAL_MODULE = importlib.util.module_from_spec(EXTERNAL_SPEC)
+EXTERNAL_SPEC.loader.exec_module(EXTERNAL_MODULE)
 
 
 class StudyTriageTests(unittest.TestCase):
@@ -43,6 +48,42 @@ class StudyTriageTests(unittest.TestCase):
         self.assertEqual(result["route"]["family"], "randomized_trial")
         self.assertEqual(result["route"]["flow_layout"], "consort_trial")
         self.assertEqual(result["content_policy"]["table_cell_max_words"], 25)
+        self.assertEqual(result["external_evidence"]["activation"], "disabled")
+
+    def test_external_evidence_is_default_disabled(self):
+        self.assertEqual(EXTERNAL_MODULE.activation_decision(), {"activate": False, "reason": "default_disabled"})
+        self.assertEqual(
+            EXTERNAL_MODULE.activation_decision(classification_context_gap=True, allow_external_context=True),
+            {"activate": True, "reason": "classification_context_gap"},
+        )
+
+    def test_springer_provider_normalizes_provenance(self):
+        payload = {"result": [{"total": "1"}], "records": [{"title": "Example", "doi": "10.1000/example"}]}
+        with mock.patch.dict("os.environ", {"NATURE_API_KEY": "test-key"}), mock.patch.object(
+            EXTERNAL_MODULE, "_request_json", return_value=(200, {}, payload)
+        ):
+            result = EXTERNAL_MODULE.search_springer_open_access("keyword:trial", 1)
+        self.assertEqual(result["provider"], "springer_open_access")
+        self.assertEqual(result["total"], "1")
+        self.assertNotIn("test-key", json.dumps(result))
+
+    def test_product_specific_springer_key_precedes_fallback(self):
+        payload = {"result": [{"total": "0"}], "records": []}
+        with mock.patch.dict("os.environ", {"NATURE_META_API_KEY": "meta-key", "NATURE_API_KEY": "fallback-key"}), mock.patch.object(
+            EXTERNAL_MODULE, "_request_json", return_value=(200, {}, payload)
+        ) as request:
+            EXTERNAL_MODULE.search_springer_meta("keyword:test", 1)
+        self.assertEqual(request.call_args.kwargs["params"]["api_key"], "meta-key")
+
+    def test_scopus_provider_uses_entitlement_warning(self):
+        payload = {"search-results": {"opensearch:totalResults": "1", "entry": [{"dc:title": "Example"}]}}
+        with mock.patch.dict("os.environ", {"SCOPUS_API_KEY": "test-key"}), mock.patch.object(
+            EXTERNAL_MODULE, "_request_json", return_value=(200, {"X-RateLimit-Remaining": "19"}, payload)
+        ):
+            result = EXTERNAL_MODULE.search_scopus("TITLE-ABS-KEY(test)", 1)
+        self.assertEqual(result["provider"], "scopus")
+        self.assertIn("entitlements", " ".join(result["provenance"]["limitations"]))
+        self.assertNotIn("test-key", json.dumps(result))
 
     def test_validator_flags_dense_clinical_narrative(self):
         result = VALIDATOR_MODULE.validate_spec({
@@ -268,8 +309,9 @@ class StudyTriageTests(unittest.TestCase):
                 text=True,
             )
             from openpyxl import load_workbook
-            workbook = load_workbook(next(Path(temp_dir).glob("*-package.xlsx")), read_only=True)
+            workbook = load_workbook(next(Path(temp_dir).glob("*-package.xlsx")), read_only=False)
             self.assertEqual(workbook.sheetnames[0], "Study Characteristics")
+            workbook.close()
             header = next(Path(temp_dir).glob("*-table1.csv")).read_text(encoding="utf-8-sig").splitlines()[0]
             self.assertIn("Study,Year,Country/setting,Design", header)
 
@@ -293,9 +335,11 @@ class StudyTriageTests(unittest.TestCase):
                 text=True,
             )
             from openpyxl import load_workbook
-            workbook = load_workbook(next(Path(temp_dir).glob("*-package.xlsx")), read_only=True)
+            workbook = load_workbook(next(Path(temp_dir).glob("*-package.xlsx")), read_only=False)
             journal_sheet = workbook["Journal Fit"]
             self.assertEqual(journal_sheet["A5"].value, "RADIOLOGY")
+            del journal_sheet
+            workbook.close()
 
     def test_crossover_trial_uses_sequence_flow(self):
         root = Path(__file__).parents[1]

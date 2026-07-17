@@ -121,6 +121,15 @@ def compile_spec(source, registry=None):
     content_policy.update(spec.get("content_policy") or {})
     spec["content_policy"] = content_policy
 
+    external_evidence = {
+        "activation": "disabled",
+        "allow_external_context": False,
+        "requested_providers": [],
+        "retrievals": [],
+    }
+    external_evidence.update(spec.get("external_evidence") or {})
+    spec["external_evidence"] = external_evidence
+
     provenance = dict(spec.get("provenance") or {})
     provenance.update({
         "compiler": "study-design-skills/compile_study_spec.py",

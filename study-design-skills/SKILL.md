@@ -219,10 +219,13 @@ Do not describe the benchmark as publication probability.
 
 Load `references/mcp-integration-roadmap.md` when external tools are available or when building an MCP.
 
-- Prefer official APIs for ClinicalTrials.gov, PubMed/NCBI E-utilities, and NIH RePORTER.
+- External evidence is disabled by default. Load `references/external-evidence-policy.json` before activating a provider.
+- Activate a provider only after an explicit user request, or for a classification context gap when `allow_external_context` is true.
+- Prefer official APIs for Springer Nature Meta/OA, Scopus, ClinicalTrials.gov, PubMed/NCBI E-utilities, and NIH RePORTER.
 - Treat EQUATOR, Cochrane, and Bristol QUADAS as curated, versioned knowledge sources unless a stable official API is documented.
 - Record source, version, retrieval date, and limitations.
 - Keep patient-level data local and send only de-identified search concepts to public services.
+- Never invoke an external provider during routine rendering, Table 1 generation, or scoring.
 - Mark unavailable external validation as `not verified`; do not silently infer it.
 
 ## Quality Gates
@@ -251,6 +254,7 @@ Before finalizing:
 - `references/clinical-language-density.md`: audience, readability, and structure constraints.
 - `references/renderer-contract.md`: allowed renderer behavior and compatibility boundary.
 - `references/mcp-integration-roadmap.md`: external evidence and MCP plan.
+- `references/external-evidence-policy.json`: provider capabilities and activation gates.
 - `references/flowchart-design.md`: flowchart contracts.
 - `references/table1-statistical-decisions.md`: Table 1 computation and reporting.
 - `references/causal-design-matching.md`: DAG and causal design.
@@ -260,6 +264,8 @@ Before finalizing:
 - `references/benchmark-scoring.md`: 10-point benchmark.
 - `evals/rubrics/`: shared and design-family criteria.
 - `scripts/classify_study.py`: one-question triage.
+- `scripts/external_evidence.py`: deterministic official-API clients.
+- `scripts/mcp_server.py`: local on-demand HTTP MCP facade.
 - `scripts/compile_study_spec.py`: canonical compiler.
 - `scripts/validate_study_spec.py`: contract and density validator.
 - `scripts/select_rubrics.py`: conditional rubric selector.

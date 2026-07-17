@@ -1,0 +1,61 @@
+{
+  "policy_version": "1.0",
+  "default_mode": "disabled",
+  "activation_rules": {
+    "explicit_user_request": true,
+    "classification_context_gap": {
+      "enabled_only_when": "allow_external_context is true",
+      "allowed_purposes": [
+        "resolve unfamiliar intervention or technology",
+        "identify whether the question concerns efficacy, accuracy, prediction, implementation, or evidence synthesis",
+        "find a registered or published design precedent when local context is insufficient"
+      ]
+    },
+    "rendering": false,
+    "routine_table1_generation": false,
+    "routine_scoring": false
+  },
+  "providers": {
+    "springer_meta": {
+      "credential_env": "NATURE_META_API_KEY",
+      "credential_fallback_env": "NATURE_API_KEY",
+      "capability": "metadata_and_abstracts",
+      "allowed_purposes": ["design precedent", "journal precedent", "guideline publication discovery"]
+    },
+    "springer_open_access": {
+      "credential_env": "NATURE_OPENACCESS_API_KEY",
+      "credential_fallback_env": "NATURE_API_KEY",
+      "capability": "oa_metadata_and_jats_full_text",
+      "allowed_purposes": ["methods extraction", "design precedent", "reporting example"]
+    },
+    "scopus": {
+      "credential_env": "SCOPUS_API_KEY",
+      "capability": "abstract_citation_and_affiliation_metadata",
+      "allowed_purposes": ["design precedent", "citation landscape", "journal precedent"]
+    },
+    "clinical_trials": {
+      "credential_env": null,
+      "capability": "registered_trial_designs",
+      "allowed_purposes": ["eligibility precedent", "endpoint precedent", "sample-size feasibility", "active study comparison"]
+    },
+    "pubmed": {
+      "credential_env": "NCBI_API_KEY",
+      "credential_optional": true,
+      "capability": "biomedical_citations",
+      "allowed_purposes": ["guideline discovery", "methods evidence", "clinical precedent"]
+    },
+    "nih_reporter": {
+      "credential_env": null,
+      "capability": "funded_project_metadata",
+      "allowed_purposes": ["funding landscape", "active investigator landscape"]
+    }
+  },
+  "governance": {
+    "patient_level_data_allowed": false,
+    "deidentified_search_concepts_only": true,
+    "persist_raw_full_text_by_default": false,
+    "record_provenance": true,
+    "maximum_default_records": 5,
+    "maximum_records_per_call": 20
+  }
+}

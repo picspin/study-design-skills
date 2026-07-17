@@ -911,6 +911,7 @@ def write_xlsx(path, spec, columns, rows, journals, categories, scoring):
     notes_sheet.column_dimensions["B"].width = 110
 
     workbook.save(path)
+    workbook.close()
 
 
 def style_sheet(sheet, columns, dark, accent, white, thin, header_row=4):

@@ -27,6 +27,7 @@ study-design-skills/
     study-package.schema.json
   references/
     route-registry.json
+    external-evidence-policy.json
     clinical-language-density.md
     renderer-contract.md
     mcp-integration-roadmap.md
@@ -44,6 +45,8 @@ study-design-skills/
     compile_study_spec.py
     validate_study_spec.py
     select_rubrics.py
+    external_evidence.py
+    mcp_server.py
     design_study.py
     generate_study_package.py
 examples/
@@ -136,13 +139,27 @@ The benchmark is not an acceptance probability. Planned matching, weighting, imp
 
 ## External Evidence And MCP
 
+`references/external-evidence-policy.json` keeps every provider disabled by default. A provider is activated only by an explicit request, or by a classification context gap when external context has been allowed. Routine rendering, Table 1 generation, sample-size calculation, and scoring remain offline.
+
 `references/mcp-integration-roadmap.md` defines three integration tiers:
 
-1. official public APIs for ClinicalTrials.gov, PubMed/NCBI E-utilities, and NIH RePORTER;
+1. official APIs for Springer Nature Meta/OA, Scopus, ClinicalTrials.gov, PubMed/NCBI E-utilities, and NIH RePORTER;
 2. a curated, versioned local knowledge service for EQUATOR, Cochrane, and Bristol QUADAS materials;
 3. deterministic statistical services for complex sample size, SMD/weighting diagnostics, DAG temporal checks, E-values, and risk-of-bias worksheets.
 
 External retrieval must preserve source URL, version, retrieval date, and limitations. Patient-level data remain local; only de-identified search concepts may be sent to public services.
+
+Start the optional local streamable HTTP MCP:
+
+```bash
+pip install -r requirements-mcp.txt
+export NATURE_OPENACCESS_API_KEY=...
+export NATURE_META_API_KEY=...  # optional, requires Meta API entitlement
+export SCOPUS_API_KEY=...
+python study-design-skills/scripts/mcp_server.py
+```
+
+The default endpoint is `http://127.0.0.1:8765/mcp`; `.mcp.json.example` contains the client entry. Credentials are read only from the MCP process environment; `.env` files and real keys are excluded from Git. `NATURE_API_KEY` remains a compatibility fallback for existing OA setups, but Springer Nature product entitlements can differ by key.
 
 ## Journal Reference Set
 

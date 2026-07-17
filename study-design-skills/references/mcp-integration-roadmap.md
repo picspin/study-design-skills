@@ -2,7 +2,42 @@
 
 Treat MCP as an evidence-retrieval layer, not as a substitute for study-design reasoning. Keep retrieved records, tool versions, timestamps, and source URLs in provenance.
 
+## Activation Gate
+
+All providers are disabled by default. Load `external-evidence-policy.json` and activate a provider only when:
+
+1. the user explicitly requests an external search, precedent review, trial search, full-text retrieval, or funding landscape; or
+2. classification cannot resolve an unfamiliar intervention, technology, endpoint, or intended use from local context and `allow_external_context` is explicitly true.
+
+Do not activate external evidence for routine rendering, Table 1 construction, sample-size calculation, or benchmark scoring. An MCP tool call is itself explicit activation; an internal agent workflow must still record the activation reason.
+
 ## Tier 1: Stable Public APIs
+
+### Springer Nature Meta And Open Access APIs
+
+Documentation: `https://dev.springernature.com/docs/introduction/`
+
+Use Meta v2 for versioned metadata and abstracts. Use the Open Access JSON endpoint for OA discovery and the OA JATS endpoint only when full-text methods or design details are needed.
+
+MCP tools:
+
+- `springer_meta_search(query, limit)`
+- `springer_open_access_search(query, limit)`
+- `springer_open_access_full_text(query, limit, max_chars)`
+
+Read product-specific keys from `NATURE_META_API_KEY` and `NATURE_OPENACCESS_API_KEY`. `NATURE_API_KEY` remains a compatibility fallback, but one product's key may not be entitled to another product. Do not place keys in a study package. OA status does not by itself establish methodological quality, and JATS responses may require truncation before entering model context.
+
+### Elsevier Scopus API
+
+Documentation: `https://dev.elsevier.com/academic_research_scopus.html`
+
+Use Scopus for abstract, citation, source, author, and affiliation metadata when PubMed or publisher-specific metadata is insufficient. Authenticate through the `X-ELS-APIKey` header using `SCOPUS_API_KEY`.
+
+MCP tools:
+
+- `scopus_search(query, limit)`
+
+Availability and returned fields depend on the API key, institutional subscription, IP range, and entitlements. Scopus results are evidence-discovery metadata, not permission to retrieve or redistribute subscription full text.
 
 ### ClinicalTrials.gov API v2
 
@@ -102,3 +137,21 @@ Return assumptions, formulas, software versions, seeds, warnings, and structured
 - Separate evidence retrieval from normative design decisions.
 - Log every external source used in the final package.
 - Fail closed when a required source is unavailable: mark the relevant section `not verified`, not silently inferred.
+- Keep credentials only in environment variables and redact provider errors.
+- Bind the bundled HTTP MCP to `127.0.0.1` unless authenticated remote deployment is deliberately configured.
+
+## Local HTTP MCP
+
+Install optional dependencies and start the streamable HTTP endpoint:
+
+```bash
+pip install -r requirements-mcp.txt
+export NATURE_OPENACCESS_API_KEY=...
+export NATURE_META_API_KEY=...  # only when Meta API access is enabled
+export SCOPUS_API_KEY=...
+python study-design-skills/scripts/mcp_server.py
+```
+
+Default endpoint: `http://127.0.0.1:8765/mcp`.
+
+The server exposes provider-specific tools rather than one automatic global search. This makes provider activation visible in the tool trace and keeps routine study-design generation offline.
