@@ -13,7 +13,7 @@ Act as a research methods coach and design reviewer for clinicians, medical stud
 
 Use this pipeline:
 
-`proposal -> triage -> confirmed design -> route references -> study-package JSON -> validation -> renderers -> rubrics`
+`proposal -> triage -> confirmed design -> route references -> study-package JSON -> validation -> renderers -> rubrics -> [optional: compliance audit] -> [optional: Cochrane evidence] -> [evaluation HTML]`
 
 Maintain one content source. Never separately rewrite Table 1, flowchart, HTML, XLSX, CSV, and Markdown content.
 
@@ -362,7 +362,7 @@ Before finalizing:
 - distinguish pending plans from completed analysis;
 - run tests and file QA.
 
-## Pipeline Summary\n\n```\nproposal\n  │\n  ├─ Step 1: Triage (classify_study.py) ──── clarify & confirm design\n  │\n  ├─ Step 2: Route (route-registry.json) ─── select design, references, rubrics\n  │\n  ├─ Step 3: Author (compile_study_spec.py) ── build JSON content source\n  │\n  ├─ Step 4: Validate (validate_study_spec.py) ── schema + density checks\n  │\n  ├─ Step 5: Render (design_study.py) ───────── Table 1, flowchart, XLSX, HTML, MD\n  │\n  ├─ Step 6: Evaluate (select_rubrics.py) ───── benchmark scoring\n  │\n  ├─ [Optional] Step 7: Reporting compliance audit\n  │   checklists/ → check_reporting_compliance.py → PRESENT/PARTIAL/MISSING\n  │\n  └─ [Optional] Step 8: Cochrane evidence lazy-load\n      cochrane_evidence.py → effect estimates, review characteristics, RoB\n```\n\n## Bundled Resources
+## Pipeline Summary\n\n```\nproposal\n  │\n  ├─ Step 1: Triage (classify_study.py) ──── clarify & confirm design\n  │\n  ├─ Step 2: Route (route-registry.json) ─── select design, references, rubrics\n  │\n  ├─ Step 3: Author (compile_study_spec.py) ── build JSON content source\n  │\n  ├─ Step 4: Validate (validate_study_spec.py) ── schema + density checks\n  │\n  ├─ Step 5: Render (design_study.py) ───────── Table 1, flowchart, XLSX, HTML, MD\n  │\n  ├─ Step 6: Evaluate (select_rubrics.py) ───── benchmark scoring\n  │\n  ├─ [Optional] Step 7: Reporting compliance audit\n  │   checklists/ → check_reporting_compliance.py → PRESENT/PARTIAL/MISSING\n  │\n  └─ [Optional] Step 8: Cochrane evidence lazy-load\n      cochrane_evidence.py → effect estimates, review characteristics, RoB\n  \n  ┌─ Step 9: Evaluation HTML\n      generate_evaluation_html.py → standalone evaluation page\n      ├─ combines pipeline status, study summary, design scoring\n      ├─ reporting compliance PRESENT/PARTIAL/MISSING (when provided)\n      ├─ Cochrane evidence benchmark (when provided)\n      └─ journal scope fit and generated artifact inventory\n```\n\n## Bundled Resources
 
 ### References & Schemas (existing)
 - `references/route-registry.json`: design routes, reference bundles, layouts, and rubrics.
@@ -399,12 +399,13 @@ Before finalizing:
 - `scripts/sample_size.py`: sample-size calculation toolkit.
 - `scripts/import_jcr_reference.py`: JCR benchmark import.
 
-### NEW Compliance & Evidence Scripts (5)
+### Compliance, Evidence & Evaluation Scripts (6)
 - `scripts/checklist_exists.py`: deterministic fail-fast checklist existence guard. Exit 0 = vendored, 1 = MISSING_CHECKLIST_CONTRACT_VIOLATION, 2 = UNKNOWN_GUIDELINE.
 - `scripts/check_reporting_compliance.py`: auto-select guideline from design route, load vendored checklist, scan manuscript, produce PRESENT/PARTIAL/MISSING report.
 - `scripts/cochrane_evidence.py`: Cochrane Library REST API v2 client. Lazy-load: search reviews, get review detail, build structured evidence summaries. Open-access metadata, no API key needed.
 - `scripts/prisma_cascade_check.py`: PRISMA 2020 flow-diagram arithmetic auto-verify — four equations + two cross-references.
 - `scripts/check_framework_naming.py`: AI extension naming audit — BASE_MISSING, HYPHEN_MIX, SELF_COINED_LABEL, VAGUE_GUIDANCE.
+- `scripts/generate_evaluation_html.py`: standalone evaluation HTML page generator — reads study-package.json (plus optional compliance and Cochrane outputs) and produces a self-contained, printable report with pipeline status, study summary, design scoring, compliance table, Cochrane evidence, journal fit, and artifact inventory.
 
 ### Agent Plugin Manifests (NEW, project root)
 - `.claude-plugin/marketplace.json`: plugin registration for Claude Code marketplace.

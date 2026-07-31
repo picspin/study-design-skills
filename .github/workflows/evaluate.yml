@@ -1,0 +1,137 @@
+name: Study Evaluation
+
+on:
+  workflow_dispatch:
+    inputs:
+      study_json:
+        description: 'study-package.json path (relative to repo root)'
+        required: true
+        default: 'examples/randomized_trial_confirmed.json'
+      manuscript_md:
+        description: 'Manuscript Markdown path (optional)'
+        required: false
+        default: ''
+      cochrane_query:
+        description: 'Cochrane search query (optional, e.g. "clinical decision support medication error")'
+        required: false
+        default: ''
+      title:
+        description: 'Display title override (optional)'
+        required: false
+        default: ''
+  push:
+    paths:
+      - 'examples/*.json'
+      - 'skills/study-design-skills/scripts/*.py'
+      - 'skills/study-design-skills/references/checklists/*.md'
+      - '.github/workflows/evaluate.yml'
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install numpy openpyxl pandas scipy jsonschema mpmath
+
+      - name: Compile study specification
+        run: |
+          JSON="${{ github.event.inputs.study_json || 'examples/randomized_trial_confirmed.json' }}"
+          echo "Using study JSON: $JSON"
+          python skills/study-design-skills/scripts/compile_study_spec.py \
+            "$JSON" --out /tmp/compiled-study-package.json
+          echo "Compiled OK"
+          python -c "import json; d=json.load(open('/tmp/compiled-study-package.json')); print('Title:', d.get('study_title','?')); print('Design:', d.get('confirmed_design','?')); print('Route:', d.get('route',{}).get('design_id','?'))"
+
+      - name: Validate study specification
+        run: |
+          python skills/study-design-skills/scripts/validate_study_spec.py \
+            /tmp/compiled-study-package.json || echo "Validation warnings (non-fatal)"
+
+      - name: Generate study package (Table 1, scoring, journals)
+        run: |
+          python skills/study-design-skills/scripts/generate_study_package.py \
+            /tmp/compiled-study-package.json \
+            --out-dir /tmp/study-output \
+            --formats html,json || echo "Package generation warnings (non-fatal)"
+
+      - name: Reporting compliance audit (if manuscript provided)
+        run: |
+          if [ -n "${{ github.event.inputs.manuscript_md }}" ]; then
+            python skills/study-design-skills/scripts/check_reporting_compliance.py \
+              /tmp/compiled-study-package.json \
+              "${{ github.event.inputs.manuscript_md }}" \
+              --out /tmp/compliance-report.md || true
+          else
+            echo "No manuscript provided — skipping compliance audit"
+          fi
+
+      - name: Cochrane evidence retrieval (if query provided)
+        run: |
+          QUERY="${{ github.event.inputs.cochrane_query }}"
+          if [ -n "$QUERY" ]; then
+            python skills/study-design-skills/scripts/cochrane_evidence.py \
+              search "$QUERY" --out /tmp/cochrane-results.json || true
+          else
+            echo "No Cochrane query provided — skipping"
+          fi
+
+      - name: Generate evaluation HTML
+        run: |
+          COMPLIANCE_FLAG=""
+          if [ -f /tmp/compliance-report.md ]; then
+            COMPLIANCE_FLAG="--compliance /tmp/compliance-report.md"
+          fi
+          COCHRANE_FLAG=""
+          if [ -f /tmp/cochrane-results.json ]; then
+            COCHRANE_FLAG="--cochrane /tmp/cochrane-results.json"
+          fi
+          TITLE_FLAG=""
+          if [ -n "${{ github.event.inputs.title }}" ]; then
+            TITLE_FLAG="--study-title '${{ github.event.inputs.title }}'"
+          fi
+
+          python skills/study-design-skills/scripts/generate_evaluation_html.py \
+            /tmp/compiled-study-package.json \
+            $COMPLIANCE_FLAG $COCHRANE_FLAG $TITLE_FLAG \
+            --out /tmp/study-evaluation/index.html
+
+      - name: Copy full package outputs to Pages dir
+        run: |
+          mkdir -p /tmp/study-evaluation/outputs
+          if [ -d /tmp/study-output ]; then
+            cp -r /tmp/study-output/* /tmp/study-evaluation/outputs/ 2>/dev/null || true
+          fi
+          if [ -f /tmp/compliance-report.md ]; then
+            cp /tmp/compliance-report.md /tmp/study-evaluation/outputs/
+          fi
+          if [ -f /tmp/cochrane-results.json ]; then
+            cp /tmp/cochrane-results.json /tmp/study-evaluation/outputs/
+          fi
+          ls -la /tmp/study-evaluation/
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: /tmp/study-evaluation
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
