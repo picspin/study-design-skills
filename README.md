@@ -1,176 +1,92 @@
-# Study Design Skills
+# PDBC Study Design Skills
 
-A production-oriented biomedical study-design skill that converts a proposal into one validated JSON content source, then renders synchronized Table 1, enrollment flow, sample-size, journal-fit, and benchmark artifacts.
+**Multi-agent biomedical study-design plugin** — triage, validate, render, report-compliance audit, Cochrane evidence benchmark. Supports **Claude Code**, **Codex**, **OpenCode**, **OpenClaw**, and **Hermes**.
 
-The architecture borrows a useful pattern from Anthropic's K12 teacher skills: keep the main skill small and route-specific, keep content separate from rendering, load only the references required for the selected domain, and enforce readability with machine-checkable rules.
+---
 
-## Architecture
+## What it does
 
-```text
-proposal
-  -> one-question triage
-  -> confirmed design
-  -> route-registry.json
-  -> route-specific references
-  -> canonical study-package JSON
-  -> schema + method + density validation
-  -> deterministic CSV/XLSX/HTML/Markdown renderers
-  -> shared + design-family evaluation rubrics
+Route any biomedical research proposal through a deterministic 8-step pipeline:
+
+| Step | What | Script |
+|------|------|--------|
+| 1 | **Triage** — clarify the study idea, confirm design | `classify_study.py` |
+| 2 | **Route** — load design-specific references, rubrics | `route-registry.json` |
+| 3 | **Author** — build versioned JSON specification | `compile_study_spec.py` |
+| 4 | **Validate** — schema + density checks | `validate_study_spec.py` |
+| 5 | **Render** — Table 1, flowchart, XLSX, HTML, Markdown | `generate_study_package.py` |
+| 6 | **Score** — benchmark against JCR + design-specific rubrics | `select_rubrics.py` |
+| 7 | **Compliance** — audit against EQUATOR reporting guideline | `check_reporting_compliance.py` |
+| 8 | **Cochrane evidence** — lazy-load existing systematic-review effect estimates | `cochrane_evidence.py` |
+
+### Covered study families
+
+Randomized trials · ITS / CITS / DiD · Causal observational / RWE · Descriptive observational · Diagnostic accuracy · Comparative diagnostic accuracy · Prediction models (classic + AI/ML) · Systematic reviews / meta-analyses · Scoping reviews · Qualitative studies · Economic evaluations · AI healthcare workflows · Animal studies · Case reports
+
+### Vendored checklists (27 files)
+
+- **EQUATOR reporting guidelines:** CONSORT 2025, CONSORT-AI, STROBE, RECORD, STARD 2015, STARD-AI, TRIPOD 2015, TRIPOD+AI 2024, PRISMA 2020, PRISMA-DTA, SQUIRE 2.0, TREND, CHEERS 2022, SRQR, COREQ, ARRIVE 2.0, CARE, SPIRIT, CLAIM 2024, MI-CLEAR-LLM
+- **Cochrane risk-of-bias tools:** RoB 2, ROBINS-I, ROB-ME, RoB NMA
+- **Bristol/Cochrane bias tools:** QUADAS-3, QUADAS-C, PROBAST+AI
+
+---
+
+## Installation
+
+### Claude Code (recommended)
+
+```
+/plugin marketplace add picspin/study-design-skills
+/plugin install study-design-skills
 ```
 
-The canonical JSON is the source of truth. HTML, XLSX, CSV, Markdown, and flowcharts are views of the same object, not separately authored documents.
-
-```text
-study-design-skills/
-  SKILL.md
-  schemas/
-    study-package.schema.json
-  references/
-    route-registry.json
-    external-evidence-policy.json
-    clinical-language-density.md
-    renderer-contract.md
-    mcp-integration-roadmap.md
-    ...
-  evals/rubrics/
-    shared.csv
-    randomized-trial.csv
-    causal-observational.csv
-    diagnostic-accuracy.csv
-    prediction.csv
-    time-series-qi.csv
-    ...
-  scripts/
-    classify_study.py
-    compile_study_spec.py
-    validate_study_spec.py
-    select_rubrics.py
-    external_evidence.py
-    mcp_server.py
-    design_study.py
-    generate_study_package.py
-examples/
-tests/
-```
-
-## Design Routing
-
-`references/route-registry.json` maps each confirmed design to:
-
-- study-design family;
-- required reference bundle;
-- Table 1 profile;
-- enrollment-flow layout;
-- required content fields;
-- methods that must not be applied by default;
-- design-specific evaluation rubric.
-
-Supported routes include randomized and stepped-wedge trials, ITS/CITS/DiD, causal and descriptive observational studies, diagnostic accuracy, prediction development and validation, evidence synthesis, qualitative studies, and economic evaluation.
-
-The route keeps five layers separate: scientific question, study design, reporting guideline, bias tool, and analysis method. A familiar method such as PSM or multiple imputation cannot determine the design.
-
-## JSON-Driven Workflow
-
-Install dependencies:
+### Cross-agent installer (Python)
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+git clone https://github.com/picspin/study-design-skills.git
+cd study-design-skills
+python3 installers/install.py --target all
+python3 installers/install.py --self-test   # dry-run integrity check
 ```
 
-Triage an uncertain proposal:
+### Bash installer
 
 ```bash
-python study-design-skills/scripts/classify_study.py \
-  examples/llm_quality_proposal.json \
-  --format markdown
+bash installers/install.sh
 ```
 
-Compile a confirmed or legacy flat specification:
+---
+
+## Quick-start
 
 ```bash
-python study-design-skills/scripts/compile_study_spec.py \
-  examples/randomized_trial_confirmed.json \
-  --out outputs/randomized-trial-study-package.json
+# 1. Triage
+echo '{"proposal": "Does Drug X reduce cardiovascular events in Type 2 diabetes?"}' > proposal.json
+python3 skills/study-design-skills/scripts/classify_study.py proposal.json --format markdown
+
+# 2. Build spec
+python3 skills/study-design-skills/scripts/compile_study_spec.py proposal.json --out study-package.json
+
+# 3. Validate
+python3 skills/study-design-skills/scripts/validate_study_spec.py study-package.json
+
+# 4. Render
+python3 skills/study-design-skills/scripts/design_study.py study-package.json --out-dir outputs/my-study --formats xlsx,csv,html,md
+
+# 5. Compliance check
+python3 skills/study-design-skills/scripts/checklist_exists.py --guideline CONSORT
+python3 skills/study-design-skills/scripts/check_reporting_compliance.py study-package.json manuscript.md --out qc/compliance.md
+
+# 6. Cochrane evidence
+python3 skills/study-design-skills/scripts/cochrane_evidence.py search "metformin type 2 diabetes cardiovascular"
 ```
 
-Validate the contract and clinical-density rules:
+---
 
-```bash
-python study-design-skills/scripts/validate_study_spec.py \
-  outputs/randomized-trial-study-package.json
+## License
 
-python study-design-skills/scripts/validate_study_spec.py \
-  outputs/randomized-trial-study-package.json \
-  --strict
-```
+MIT. See [LICENSE](LICENSE).
 
-Non-strict validation is appropriate while assumptions and approval-dependent data remain pending. Strict validation converts missing route-required content into errors.
+## Citation
 
-Render synchronized outputs:
-
-```bash
-python study-design-skills/scripts/design_study.py \
-  examples/randomized_trial_confirmed.json \
-  --out-dir outputs/randomized-trial \
-  --formats xlsx,csv,html,md
-```
-
-Each rendered package includes the exact compiled `*-study-package.json` used by the renderers and a manifest recording the route and schema version.
-
-Select evaluation criteria:
-
-```bash
-python study-design-skills/scripts/select_rubrics.py \
-  outputs/randomized-trial/randomized-trial-study-package.json \
-  --out outputs/randomized-trial/selected-rubrics.json
-```
-
-## Output Contracts
-
-- **Table 1:** randomized arms, exposure balance, diagnostic spectrum, periods/series, validation cohorts, participant context, or study characteristics according to the route.
-- **Flowchart:** connected publication-style enrollment and analysis flow using the selected CONSORT, STARD, STROBE/RECORD, TRIPOD+AI, SQUIRE, or PRISMA-oriented layout.
-- **Sample size:** assumptions and analyzable/recruited targets aligned to the primary estimand; unsupported complex designs return `assumptions_required`.
-- **Benchmark:** shared criteria plus a design-family rubric and the JCR specialty profile, reported on a 10-point methodological/editorial-fit scale.
-- **Language:** clinically readable blocks, compact flow nodes, short labels, structured comparison tables, and explicit separation of known, planned, pending, and not estimable.
-
-The benchmark is not an acceptance probability. Planned matching, weighting, imputation, or validation is never scored as completed analysis.
-
-## External Evidence And MCP
-
-`references/external-evidence-policy.json` keeps every provider disabled by default. A provider is activated only by an explicit request, or by a classification context gap when external context has been allowed. Routine rendering, Table 1 generation, sample-size calculation, and scoring remain offline.
-
-`references/mcp-integration-roadmap.md` defines three integration tiers:
-
-1. official APIs for Springer Nature Meta/OA, Scopus, ClinicalTrials.gov, PubMed/NCBI E-utilities, and NIH RePORTER;
-2. a curated, versioned local knowledge service for EQUATOR, Cochrane, and Bristol QUADAS materials;
-3. deterministic statistical services for complex sample size, SMD/weighting diagnostics, DAG temporal checks, E-values, and risk-of-bias worksheets.
-
-External retrieval must preserve source URL, version, retrieval date, and limitations. Patient-level data remain local; only de-identified search concepts may be sent to public services.
-
-Start the optional local streamable HTTP MCP:
-
-```bash
-pip install -r requirements-mcp.txt
-export NATURE_OPENACCESS_API_KEY=...
-export NATURE_META_API_KEY=...  # optional, requires Meta API entitlement
-export SCOPUS_API_KEY=...
-python study-design-skills/scripts/mcp_server.py
-```
-
-The default endpoint is `http://127.0.0.1:8765/mcp`; `.mcp.json.example` contains the client entry. Credentials are read only from the MCP process environment; `.env` files and real keys are excluded from Git. `NATURE_API_KEY` remains a compatibility fallback for existing OA setups, but Springer Nature product entitlements can differ by key.
-
-## Journal Reference Set
-
-`references/jcr-2026-medicine-top69.csv` contains 69 category records representing 68 unique non-review journal titles from the supplied JCR workbook. Journal scope-fit is an editorial aid, not a substitute for methodological quality. Confirm current author instructions and data redistribution rights before public release.
-
-## Development
-
-Run the test suite:
-
-```bash
-PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
-```
-
-The renderer migration is backward compatible. Legacy text inference remains only as a fallback; canonical `route.flow_layout` and `route.table_profile` take precedence, and new medical decision logic belongs in the route/compiler/reference layers.
+See `CITATION.cff`.

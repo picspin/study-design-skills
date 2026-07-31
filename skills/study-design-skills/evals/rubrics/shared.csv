@@ -1,0 +1,11 @@
+ID,Bucket,Criterion,What pass requires,Notes,Conditional,Severity
+S1,Design,Question-design alignment,"Primary objective, estimand, comparator, time anchor, and chosen design answer the same scientific question.","Fail when a familiar method determines the design.",,critical
+S2,Design,Confirmed route,"The artifact names one confirmed design ID and separates reporting guideline, bias tool, and analysis method.","Do not merge these layers.",,critical
+S3,Flow,Denominator integrity,"Flowchart, Table 1, Methods population, and final analysis denominators reconcile by unit.","Pending counts are allowed only for a protocol.",,critical
+S4,Table,Table object fit,"The characteristics table matches the design and analysis population rather than defaulting to a generic patient baseline table.","Systematic reviews use study characteristics.",,major
+S5,Statistics,Primary analysis fit,"The primary model estimates the prespecified estimand and accounts for pairing, clustering, time, censoring, readers, or repeated measures as applicable.","Software names alone do not pass.",,critical
+S6,Statistics,Sample size transparency,"Sample size or precision planning states method, assumptions, analyzable sample, and recruitment target; unsupported numbers are not invented.","Complex designs may require simulation.",,major
+S7,Bias,Bias-method mapping,"Each major bias threat is paired with a design, measurement, analysis, or sensitivity control that can address it.","A checklist name alone does not pass.",,critical
+S8,Reporting,Guideline applicability,"Guideline stack is applicable to the confirmed design and overlays are justified by data source or intervention type.","Reporting guidance does not correct bias.",,major
+S9,Output,Clinical readability,"Prose is clinically direct; parallel content uses tables; sequential content uses flowcharts; denominator units are explicit.","Apply clinical-language-density.md.",,major
+S10,Provenance,Source traceability,"External guidelines, APIs, journal data, and computations include source, version or retrieval date, and limitations.","No invented citations.",,major

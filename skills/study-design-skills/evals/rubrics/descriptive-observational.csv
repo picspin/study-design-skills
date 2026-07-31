@@ -1,0 +1,3 @@
+ID,Bucket,Criterion,What pass requires,Notes,Conditional,Severity
+DESC1,Design,Sampling frame,"Setting, sampling frame, eligibility, recruitment, measurement timing, and analysis population are explicit.","Report representativeness limits.",family=descriptive_observational,critical
+DESC2,Analysis,Association scope,"Models and covariates match a descriptive or associational claim and do not imply an unsupported causal effect.","Do not add PSM merely because groups exist.",family=descriptive_observational,major

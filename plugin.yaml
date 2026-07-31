@@ -1,0 +1,12 @@
+name: study-design-skills
+version: "1.0.0"
+description: "Biomedical study design pipeline: triage → design → validate → render → report compliance → Cochrane evidence"
+agent: opencode
+install:
+  type: skill_copy
+  source: skills/study-design-skills
+  target: "~/.opencode/skills/study-design-skills"
+skills:
+  - id: study-design-skills
+    entry: SKILL.md
+    source: skills/study-design-skills

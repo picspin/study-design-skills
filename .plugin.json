@@ -1,0 +1,24 @@
+{
+  "name": "study-design-skills",
+  "version": "1.0.0",
+  "description": "Biomedical study design pipeline: triage → design → validate → render → report compliance → Cochrane evidence benchmark",
+  "agent_compatibility": ["claude-code", "opencode", "openclaw", "hermes", "codex"],
+  "install": {
+    "type": "skill_copy",
+    "source": "skills/study-design-skills",
+    "targets": {
+      "claude": "~/.claude/skills/study-design-skills",
+      "codex": "~/.codex/skills/study-design-skills",
+      "opencode": "~/.opencode/skills/study-design-skills",
+      "openclaw": "~/.openclaw/skills/study-design-skills",
+      "hermes": "~/.hermes/skills/study-design-skills"
+    }
+  },
+  "skills": [
+    {
+      "id": "study-design-skills",
+      "entry": "SKILL.md",
+      "source": "skills/study-design-skills"
+    }
+  ]
+}

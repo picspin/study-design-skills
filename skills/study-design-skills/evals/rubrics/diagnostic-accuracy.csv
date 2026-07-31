@@ -1,0 +1,5 @@
+ID,Bucket,Criterion,What pass requires,Notes,Conditional,Severity
+DTA1,Design,Clinical sampling pathway,"One-gate or two-gate sampling, setting, referral pathway, and clinical spectrum are explicit.","Two-gate designs require strong justification.",family=diagnostic_accuracy,critical
+DTA2,Bias,Verification and reference standard,"Reference standard, timing, blinding, completeness, incorporation, and indeterminate results are specified.","Show partial or differential verification.",family=diagnostic_accuracy,critical
+DTA3,Analysis,Accuracy unit and pairing,"Patient, image, lesion, and reader units are separated; paired tests use paired analysis and account for readers or sites.","Do not collapse incompatible denominators.",family=diagnostic_accuracy,critical
+DTA4,Sensitivity,Threshold and device robustness,"Threshold, reader/order, scanner/vendor, site, failed test, and reference-standard sensitivity analyses are prespecified.","Map to spectrum and verification threats.",family=diagnostic_accuracy,major

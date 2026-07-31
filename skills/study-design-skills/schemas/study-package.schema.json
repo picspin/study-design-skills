@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/picspin/study-design-skills/schemas/study-package.schema.json",
+  "title": "Study Design Package",
+  "type": "object",
+  "required": ["schema_version", "study_title", "study_type", "confirmed_design", "route"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "study_title": {"type": "string", "minLength": 1},
+    "study_type": {"type": "string", "minLength": 1},
+    "confirmed_design": {"type": "string", "minLength": 1},
+    "proposal": {"type": "string"},
+    "primary_objective": {"type": "string"},
+    "secondary_objectives": {
+      "oneOf": [
+        {"type": "string"},
+        {"type": "array", "items": {"type": "string"}}
+      ]
+    },
+    "population": {"type": "string"},
+    "comparator": {"type": "string"},
+    "time_zero": {"type": ["string", "number"]},
+    "groups": {"type": "array"},
+    "variables": {"type": "array"},
+    "flow_counts": {"type": "object"},
+    "flow_exclusions": {"type": "object"},
+    "route": {
+      "type": "object",
+      "required": ["design_id", "family", "label", "flow_layout", "table_profile", "references", "rubric"],
+      "properties": {
+        "design_id": {"type": "string"},
+        "family": {"type": "string"},
+        "label": {"type": "string"},
+        "flow_layout": {"type": "string"},
+        "table_profile": {"type": "string"},
+        "references": {"type": "array", "items": {"type": "string"}},
+        "rubric": {"type": "string"},
+        "required_content": {"type": "array", "items": {"type": "string"}},
+        "forbidden_defaults": {"type": "array", "items": {"type": "string"}},
+        "resolution": {"type": "string"}
+      }
+    },
+    "content_policy": {
+      "type": "object",
+      "required": ["profile", "paragraph_max_sentences", "bullet_max_words", "parallel_content"],
+      "properties": {
+        "profile": {"const": "clinical_concise"},
+        "paragraph_max_sentences": {"type": "integer", "minimum": 1},
+        "bullet_max_words": {"type": "integer", "minimum": 5},
+        "table_cell_max_words": {"type": "integer", "minimum": 5},
+        "parallel_content": {"type": "string"}
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "properties": {
+        "compiler": {"type": "string"},
+        "registry_version": {"type": "string"},
+        "source_format": {"type": "string"}
+      }
+    },
+    "external_evidence": {
+      "type": "object",
+      "properties": {
+        "activation": {"enum": ["disabled", "explicit_request", "classification_context_gap"]},
+        "allow_external_context": {"type": "boolean"},
+        "requested_providers": {
+          "type": "array",
+          "items": {"enum": ["springer_meta", "springer_open_access", "scopus", "clinical_trials", "pubmed", "nih_reporter"]}
+        },
+        "retrievals": {"type": "array"}
+      }
+    }
+  },
+  "additionalProperties": true
+}

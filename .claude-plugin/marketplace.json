@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "study-design-skills",
+  "description": "Biomedical study design pipeline: triage an idea → confirm design → compile spec → validate → render Table 1 / flowchart / XLSX / HTML → audit EQUATOR reporting compliance → benchmark against Cochrane evidence. Supports RCT, ITS/DiD, observational/RWE, diagnostic accuracy, prediction, evidence synthesis, qualitative, economic, and AI healthcare studies.",
+  "owner": {
+    "name": "PDBC"
+  },
+  "plugins": [
+    {
+      "name": "study-design-skills",
+      "description": "Route a biomedical proposal through design triage, specification compilation, validation, synchronized rendering, reporting-compliance audit (32 EQUATOR guidelines + Cochrane RoB tools), and Cochrane evidence lazy-load for intervention effect benchmarking.",
+      "source": "./",
+      "strict": false,
+      "skills": [
+        "./skills/study-design-skills"
+      ]
+    }
+  ]
+}

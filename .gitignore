@@ -1,13 +1,39 @@
+# macOS
 .DS_Store
-.venv/
-.env
-.env.*
-!.env.example
+Thumbs.db
+*.swp
+*.swo
+
+# Python
 __pycache__/
 *.py[cod]
-outputs/
+*.egg-info/
+dist/
+build/
+*.whl
+.pytest_cache/
+*.pyc
+
+# IDE
+.idea/
+.vscode/
+*.sublime-*
+
+# Secrets
+.env
+*.key
+credentials.json
+
+# Cochrane cache
+.cochrane_cache/
+
+# Local codebase memory artifacts
 .codebase-memory/
-*.xlsx
-*.xls
-*.html
-*.png
+
+# Local Claude artifacts
+.claude/plan.md
+.claude/settings.local.json
+
+# Project archives
+*.zip
+outputs/*.zip

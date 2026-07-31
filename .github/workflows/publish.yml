@@ -1,0 +1,56 @@
+name: Publish Plugin
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run full integrity suite
+        run: python installers/install.py --self-test --verbose
+
+      - name: Build plugin artifact
+        run: |
+          mkdir -p dist
+          cp -r .claude-plugin dist/
+          cp .plugin.json dist/
+          cp plugin.yaml dist/
+          cp skills/study-design-skills/SKILL.md dist/
+          cd dist && tar czf ../study-design-skills-plugin.tar.gz .
+          echo "Artifact: study-design-skills-plugin.tar.gz"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            study-design-skills-plugin.tar.gz
+          generate_release_notes: true
+          name: study-design-skills ${{ github.ref_name }}
+          body: |
+            ## study-design-skills ${{ github.ref_name }}
+
+            ### Installation
+            ```bash
+            # Claude Code
+            /plugin marketplace add Aperivue/study-design-skills
+            /plugin install study-design-skills
+
+            # Or via installer
+            git clone https://github.com/Aperivue/study-design-skills.git
+            python3 installers/install.py --target all
+            ```
+
+            ### What's included
+            See [README.md](https://github.com/Aperivue/study-design-skills) for full documentation.

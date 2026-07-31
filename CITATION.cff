@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+message: "If you use this skill in your research, please cite it as below."
+title: "PDBC Study Design Skills"
+type: software
+authors:
+  - given-names: PDBC
+    email: pdbc@example.com
+identifiers:
+  - type: url
+    value: "https://github.com/Aperivue/study-design-skills"
+repository-code: "https://github.com/Aperivue/study-design-skills"
+abstract: "A multi-agent plugin ecosystem for biomedical study design — route any research proposal through triage, design confirmation, validation, rendering, reporting-compliance audit, and Cochrane evidence benchmarking. Supports Claude Code, Codex, OpenCode, OpenClaw, and Hermes agents."
+keywords:
+  - study-design
+  - EQUATOR
+  - CONSORT
+  - STROBE
+  - STARD
+  - TRIPOD
+  - PRISMA
+  - QUADAS-3
+  - Cochrane
+  - Risk-of-Bias
+  - biomedical-research
+  - reporting-guideline
+license: MIT

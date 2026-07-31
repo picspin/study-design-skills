@@ -1,0 +1,238 @@
+{
+  "registry_version": "1.0",
+  "routes": {
+    "controlled_interrupted_time_series": {
+      "family": "time_series_qi",
+      "flow_layout": "controlled_time_series",
+      "table_profile": "period_context",
+      "rubric": "time-series-qi.csv",
+      "references": [
+        "study-intent-triage.md",
+        "design-method-matrix.md",
+        "flowchart-design.md",
+        "sample-size-estimation.md",
+        "sensitivity-analyses.md",
+        "ai-healthcare-icaml.md"
+      ],
+      "required_content": ["primary_objective", "population", "time_zero", "time_points", "comparator"],
+      "forbidden_defaults": ["propensity-score matching as the primary design control"]
+    },
+    "interrupted_time_series": {
+      "family": "time_series_qi",
+      "flow_layout": "time_series",
+      "table_profile": "period_context",
+      "rubric": "time-series-qi.csv",
+      "references": [
+        "study-intent-triage.md",
+        "design-method-matrix.md",
+        "flowchart-design.md",
+        "sample-size-estimation.md",
+        "sensitivity-analyses.md"
+      ],
+      "required_content": ["primary_objective", "population", "time_zero", "time_points"],
+      "forbidden_defaults": ["single pre-post comparison presented as an interrupted time series"]
+    },
+    "difference_in_differences": {
+      "family": "time_series_qi",
+      "flow_layout": "comparative_panel",
+      "table_profile": "group_period_context",
+      "rubric": "time-series-qi.csv",
+      "references": [
+        "study-intent-triage.md",
+        "design-method-matrix.md",
+        "flowchart-design.md",
+        "sensitivity-analyses.md"
+      ],
+      "required_content": ["primary_objective", "population", "time_zero", "time_points", "comparator"],
+      "forbidden_defaults": ["propensity-score matching as a substitute for pre-trend assessment"]
+    },
+    "stepped_wedge_cluster_rct": {
+      "family": "randomized_trial",
+      "flow_layout": "stepped_wedge",
+      "table_profile": "randomized_sequence",
+      "rubric": "randomized-trial.csv",
+      "references": [
+        "study-intent-triage.md",
+        "design-method-matrix.md",
+        "flowchart-design.md",
+        "sample-size-estimation.md",
+        "sensitivity-analyses.md"
+      ],
+      "required_content": ["primary_objective", "population", "time_zero", "groups"],
+      "forbidden_defaults": ["baseline p values", "propensity-score matching"]
+    },
+    "randomized_controlled_trial": {
+      "family": "randomized_trial",
+      "flow_layout": "consort_trial",
+      "table_profile": "randomized_arms",
+      "rubric": "randomized-trial.csv",
+      "references": [
+        "study-intent-triage.md",
+        "design-method-matrix.md",
+        "flowchart-design.md",
+        "sample-size-estimation.md",
+        "sensitivity-analyses.md"
+      ],
+      "required_content": ["primary_objective", "population", "time_zero", "groups"],
+      "forbidden_defaults": ["baseline p values", "propensity-score matching"]
+    },
+    "observational_causal": {
+      "family": "causal_observational",
+      "flow_layout": "record_attrition",
+      "table_profile": "exposure_balance",
+      "rubric": "causal-observational.csv",
+      "references": [
+        "study-intent-triage.md",
+        "design-method-matrix.md",
+        "causal-design-matching.md",
+        "flowchart-design.md",
+        "sample-size-estimation.md",
+        "sensitivity-analyses.md"
+      ],
+      "required_content": ["primary_objective", "population", "time_zero", "comparator", "matching"],
+      "forbidden_defaults": ["post-index covariates in a propensity model", "baseline p values for balance"]
+    },
+    "descriptive_observational": {
+      "family": "descriptive_observational",
+      "flow_layout": "strobe_cohort",
+      "table_profile": "descriptive_strata",
+      "rubric": "descriptive-observational.csv",
+      "references": [
+        "study-intent-triage.md",
+        "design-method-matrix.md",
+        "flowchart-design.md",
+        "table1-statistical-decisions.md"
+      ],
+      "required_content": ["primary_objective", "population"],
+      "forbidden_defaults": ["propensity-score matching without a causal estimand"]
+    },
+    "diagnostic_accuracy": {
+      "family": "diagnostic_accuracy",
+      "flow_layout": "stard_accuracy",
+      "table_profile": "diagnostic_spectrum",
+      "rubric": "diagnostic-accuracy.csv",
+      "references": [
+        "study-intent-triage.md",
+        "design-method-matrix.md",
+        "flowchart-design.md",
+        "sample-size-estimation.md",
+        "sensitivity-analyses.md"
+      ],
+      "required_content": ["primary_objective", "population", "reference_standard"],
+      "forbidden_defaults": ["propensity-score matching as diagnostic bias control"]
+    },
+    "comparative_diagnostic_accuracy": {
+      "family": "diagnostic_accuracy",
+      "flow_layout": "stard_comparative",
+      "table_profile": "paired_diagnostic_spectrum",
+      "rubric": "diagnostic-accuracy.csv",
+      "references": [
+        "study-intent-triage.md",
+        "design-method-matrix.md",
+        "flowchart-design.md",
+        "sample-size-estimation.md",
+        "sensitivity-analyses.md"
+      ],
+      "required_content": ["primary_objective", "population", "reference_standard", "comparator"],
+      "forbidden_defaults": ["unpaired analysis of paired tests", "propensity-score matching as diagnostic bias control"]
+    },
+    "prediction_model_development": {
+      "family": "prediction",
+      "flow_layout": "tripod_development",
+      "table_profile": "development_validation",
+      "rubric": "prediction.csv",
+      "references": [
+        "study-intent-triage.md",
+        "design-method-matrix.md",
+        "flowchart-design.md",
+        "sample-size-estimation.md",
+        "sensitivity-analyses.md"
+      ],
+      "required_content": ["primary_objective", "population", "time_zero", "validation"],
+      "forbidden_defaults": ["random split as the only internal validation", "propensity-score matching"]
+    },
+    "prediction_model_validation": {
+      "family": "prediction",
+      "flow_layout": "tripod_validation",
+      "table_profile": "external_validation",
+      "rubric": "prediction.csv",
+      "references": [
+        "study-intent-triage.md",
+        "design-method-matrix.md",
+        "flowchart-design.md",
+        "sample-size-estimation.md",
+        "sensitivity-analyses.md"
+      ],
+      "required_content": ["primary_objective", "population", "time_zero", "external_validation"],
+      "forbidden_defaults": ["model refitting before locked-model evaluation", "propensity-score matching"]
+    },
+    "systematic_review_meta_analysis": {
+      "family": "evidence_synthesis",
+      "flow_layout": "prisma_review",
+      "table_profile": "study_characteristics",
+      "rubric": "evidence-synthesis.csv",
+      "references": [
+        "study-intent-triage.md",
+        "design-method-matrix.md",
+        "flowchart-design.md",
+        "sensitivity-analyses.md"
+      ],
+      "required_content": ["primary_objective"],
+      "forbidden_defaults": ["patient baseline Table 1"]
+    },
+    "systematic_review_narrative": {
+      "family": "evidence_synthesis",
+      "flow_layout": "prisma_review",
+      "table_profile": "study_characteristics",
+      "rubric": "evidence-synthesis.csv",
+      "references": [
+        "study-intent-triage.md",
+        "design-method-matrix.md",
+        "flowchart-design.md",
+        "sensitivity-analyses.md"
+      ],
+      "required_content": ["primary_objective"],
+      "forbidden_defaults": ["meta-analysis of clinically incompatible studies"]
+    },
+    "scoping_review": {
+      "family": "evidence_synthesis",
+      "flow_layout": "prisma_review",
+      "table_profile": "evidence_map",
+      "rubric": "evidence-synthesis.csv",
+      "references": [
+        "study-intent-triage.md",
+        "design-method-matrix.md",
+        "flowchart-design.md"
+      ],
+      "required_content": ["primary_objective"],
+      "forbidden_defaults": ["effect pooling as the default objective"]
+    },
+    "qualitative_study": {
+      "family": "qualitative",
+      "flow_layout": "qualitative_participant",
+      "table_profile": "participant_context",
+      "rubric": "qualitative.csv",
+      "references": [
+        "study-intent-triage.md",
+        "design-method-matrix.md",
+        "flowchart-design.md"
+      ],
+      "required_content": ["primary_objective", "population"],
+      "forbidden_defaults": ["inferential baseline balance tests"]
+    },
+    "economic_evaluation": {
+      "family": "economic",
+      "flow_layout": "economic_model",
+      "table_profile": "economic_inputs",
+      "rubric": "economic.csv",
+      "references": [
+        "study-intent-triage.md",
+        "design-method-matrix.md",
+        "sample-size-estimation.md",
+        "sensitivity-analyses.md"
+      ],
+      "required_content": ["primary_objective", "population", "comparator"],
+      "forbidden_defaults": ["clinical Table 1 as the only economic input table"]
+    }
+  }
+}
