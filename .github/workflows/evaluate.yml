@@ -26,16 +26,14 @@ on:
       - 'skills/study-design-skills/references/checklists/*.md'
       - '.github/workflows/evaluate.yml'
 
+env:
+  # Used in artifact name for uniqueness
+  RUN_ID: ${{ github.run_id }}
+
 jobs:
-  evaluate:
+  # ── Generate study artifacts ─────────────────────────────────────────────
+  generate:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -45,8 +43,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: |
-          pip install numpy openpyxl pandas scipy jsonschema mpmath
+        run: pip install numpy openpyxl pandas scipy jsonschema mpmath
 
       - name: Compile study specification
         run: |
@@ -110,7 +107,7 @@ jobs:
             $COMPLIANCE_FLAG $COCHRANE_FLAG $TITLE_FLAG \
             --out /tmp/study-evaluation/index.html
 
-      - name: Copy full package outputs to Pages dir
+      - name: Copy full package outputs to evaluation dir
         run: |
           mkdir -p /tmp/study-evaluation/outputs
           if [ -d /tmp/study-output ]; then
@@ -122,16 +119,63 @@ jobs:
           if [ -f /tmp/cochrane-results.json ]; then
             cp /tmp/cochrane-results.json /tmp/study-evaluation/outputs/
           fi
+          echo "=== Evaluation page directory ==="
           ls -la /tmp/study-evaluation/
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+      # Upload evaluation HTML as a downloadable artifact (always available)
+      - name: Upload evaluation HTML artifact
+        uses: actions/upload-artifact@v4
         with:
+          name: study-evaluation-html
           path: /tmp/study-evaluation
+          retention-days: 30
+
+  # ── Deploy to GitHub Pages ─────────────────────────────────────────────
+  deploy-pages:
+    needs: generate
+    runs-on: ubuntu-latest
+    # Only deploy if Pages is configured; otherwise skip gracefully
+    # Set PERMIT_CHECKOUT=true environment to force deploy even without Pages enabled
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check Pages configuration
+        id: pages-check
+        run: |
+          echo "Checking GitHub Pages configuration..."
+          # Check if Pages is enabled by querying the API
+          PAGES_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/pages" || echo "000")
+          echo "Pages API HTTP status: $PAGES_STATUS"
+          if [ "$PAGES_STATUS" = "404" ]; then
+            echo "::notice::GitHub Pages is not enabled for this repository."
+            echo "::notice::To enable: Settings → Pages → Source → select GitHub Actions."
+            echo "::notice::The evaluation HTML artifact is still available in the 'generate' job artifacts."
+            echo "pages_enabled=false" >> $GITHUB_OUTPUT
+          elif [ "$PAGES_STATUS" = "200" ]; then
+            echo "::notice::GitHub Pages is enabled."
+            echo "pages_enabled=true" >> $GITHUB_OUTPUT
+          else
+            echo "::warning::Unexpected Pages API response ($PAGES_STATUS). Attempting deploy anyway."
+            echo "pages_enabled=true" >> $GITHUB_OUTPUT
+          fi
 
       - name: Deploy to GitHub Pages
+        if: steps.pages-check.outputs.pages_enabled == 'true'
         id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          artifact_name: study-evaluation-html
+
+      - name: Summary
+        run: |
+          if [ "${{ steps.pages-check.outputs.pages_enabled }}" = "true" ]; then
+            echo "✅ Evaluation page deployed to GitHub Pages."
+            echo "   URL: ${{ steps.deployment.outputs.page_url }}"
+          else
+            echo "⚠️ GitHub Pages not enabled — visit the 'generate' job to download the artifact."
+            echo "   To enable Pages: Settings → Pages → Source → GitHub Actions → Save"
+          fi
