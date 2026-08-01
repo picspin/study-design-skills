@@ -134,8 +134,10 @@ jobs:
   deploy-pages:
     needs: generate
     runs-on: ubuntu-latest
-    # Only deploy if Pages is configured; otherwise skip gracefully
-    # Set PERMIT_CHECKOUT=true environment to force deploy even without Pages enabled
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
