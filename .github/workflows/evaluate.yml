@@ -12,7 +12,7 @@ on:
         required: false
         default: ''
       cochrane_query:
-        description: 'Cochrane search query (optional, e.g. "clinical decision support medication error")'
+        description: 'Cochrane search query (optional)'
         required: false
         default: ''
       title:
@@ -44,54 +44,73 @@ jobs:
 
       - name: Compile study specification
         run: |
+          set -e
           JSON="${{ github.event.inputs.study_json || 'examples/randomized_trial_confirmed.json' }}"
           python skills/study-design-skills/scripts/compile_study_spec.py \
             "$JSON" --out /tmp/compiled-study-package.json
-          python -c "import json; d=json.load(open('/tmp/compiled-study-package.json')); print('Title:', d.get('study_title','?'))"
 
       - name: Validate study specification
         run: |
+          set -e
           python skills/study-design-skills/scripts/validate_study_spec.py \
-            /tmp/compiled-study-package.json || echo "Non-fatal warnings above"
+            /tmp/compiled-study-package.json
 
       - name: Generate study package
         run: |
+          set -e
           python skills/study-design-skills/scripts/generate_study_package.py \
             /tmp/compiled-study-package.json \
             --out-dir /tmp/study-output \
-            --formats html,json || echo "Non-fatal"
+            --formats html,json
 
       - name: Reporting compliance audit
         if: github.event.inputs.manuscript_md != ''
         run: |
+          set -e
           python skills/study-design-skills/scripts/check_reporting_compliance.py \
             /tmp/compiled-study-package.json \
             "${{ github.event.inputs.manuscript_md }}" \
-            --out /tmp/compliance-report.md || true
+            --out /tmp/compliance-report.md
 
       - name: Cochrane evidence retrieval
         if: github.event.inputs.cochrane_query != ''
         run: |
+          set -e
           python skills/study-design-skills/scripts/cochrane_evidence.py \
             search "${{ github.event.inputs.cochrane_query }}" \
-            --out /tmp/cochrane-results.json || true
+            --out /tmp/cochrane-results.json
 
       - name: Generate evaluation HTML
         run: |
+          set -e
           OPTS="--out /tmp/eval-page/index.html"
-          [ -f /tmp/compliance-report.md ] && OPTS="$OPTS --compliance /tmp/compliance-report.md"
-          [ -f /tmp/cochrane-results.json ] && OPTS="$OPTS --cochrane /tmp/cochrane-results.json"
-          [ -n "${{ github.event.inputs.title }}" ] && OPTS="$OPTS --study-title '${{ github.event.inputs.title }}'"
+          if [ -f /tmp/compliance-report.md ]; then
+            OPTS="$OPTS --compliance /tmp/compliance-report.md"
+          fi
+          if [ -f /tmp/cochrane-results.json ]; then
+            OPTS="$OPTS --cochrane /tmp/cochrane-results.json"
+          fi
+          if [ -n "${{ github.event.inputs.title }}" ]; then
+            OPTS="$OPTS --study-title '${{ github.event.inputs.title }}'"
+          fi
           python skills/study-design-skills/scripts/generate_evaluation_html.py \
             /tmp/compiled-study-package.json $OPTS
 
-      - name: Assemble evaluation directory
+      - name: Assemble and verify evaluation directory
         run: |
           mkdir -p /tmp/eval-page/outputs
-          [ -d /tmp/study-output ] && cp -r /tmp/study-output/* /tmp/eval-page/outputs/
+          if [ -d /tmp/study-output ]; then
+            cp -r /tmp/study-output/* /tmp/eval-page/outputs/
+          fi
           [ -f /tmp/compliance-report.md ] && cp /tmp/compliance-report.md /tmp/eval-page/outputs/
           [ -f /tmp/cochrane-results.json ] && cp /tmp/cochrane-results.json /tmp/eval-page/outputs/
-          echo "=== Published files ===" && find /tmp/eval-page -type f
+          echo "=== Published files ==="
+          find /tmp/eval-page -type f
+          if [ ! -s /tmp/eval-page/index.html ]; then
+            echo "ERROR: index.html is missing or empty"
+            exit 1
+          fi
+          echo "Verification passed: index.html exists and is non-empty"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -111,8 +130,22 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Upload to GitHub Pages
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: study-evaluation-html
+          path: /tmp/eval-page
+
+      - name: Verify artifact
+        run: |
+          echo "=== Artifact contents ==="
+          find /tmp/eval-page -type f
+          if [ ! -s /tmp/eval-page/index.html ]; then
+            echo "ERROR: index.html missing or empty in downloaded artifact"
+            exit 1
+          fi
+          echo "Artifact verified OK"
+
+      - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-        with:
-          artifact_name: study-evaluation-html
