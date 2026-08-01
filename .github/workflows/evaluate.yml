@@ -61,7 +61,7 @@ jobs:
           python skills/study-design-skills/scripts/generate_study_package.py \
             /tmp/compiled-study-package.json \
             --out-dir /tmp/study-output \
-            --formats html,json
+            --formats html
 
       - name: Reporting compliance audit
         if: github.event.inputs.manuscript_md != ''
