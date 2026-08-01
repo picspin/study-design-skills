@@ -98,19 +98,30 @@ jobs:
 
       - name: Assemble and verify evaluation directory
         run: |
-          mkdir -p /tmp/eval-page/outputs
-          if [ -d /tmp/study-output ]; then
-            cp -r /tmp/study-output/* /tmp/eval-page/outputs/
-          fi
-          [ -f /tmp/compliance-report.md ] && cp /tmp/compliance-report.md /tmp/eval-page/outputs/
-          [ -f /tmp/cochrane-results.json ] && cp /tmp/cochrane-results.json /tmp/eval-page/outputs/
-          echo "=== Published files ==="
-          find /tmp/eval-page -type f
+          mkdir -p /tmp/eval-page
+          # index.html must exist (generated in previous step)
           if [ ! -s /tmp/eval-page/index.html ]; then
-            echo "ERROR: index.html is missing or empty"
+            echo "ERROR: index.html missing or empty"
             exit 1
           fi
-          echo "Verification passed: index.html exists and is non-empty"
+          echo "index.html OK ($(wc -c < /tmp/eval-page/index.html) bytes)"
+          # Flatten study-output into eval-page (no nested dirs, no symlinks)
+          if [ -d /tmp/study-output ]; then
+            rsync -aL /tmp/study-output/ /tmp/eval-page/ 2>/dev/null || \
+              cp -rL /tmp/study-output/* /tmp/eval-page/ 2>/dev/null || true
+          fi
+          # Copy optional reports
+          [ -f /tmp/compliance-report.md ] && cp /tmp/compliance-report.md /tmp/eval-page/
+          [ -f /tmp/cochrane-results.json ] && cp /tmp/cochrane-results.json /tmp/eval-page/
+          echo "=== Published files ==="
+          find /tmp/eval-page -maxdepth 2 -type f | head -20
+          echo "=== No symlinks check ==="
+          if find /tmp/eval-page -type l | grep -q .; then
+            echo "ERROR: symlinks found in eval-page"
+            find /tmp/eval-page -type l
+            exit 1
+          fi
+          echo "No symlinks — clean"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
