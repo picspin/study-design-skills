@@ -105,10 +105,9 @@ jobs:
             exit 1
           fi
           echo "index.html OK ($(wc -c < /tmp/eval-page/index.html) bytes)"
-          # Flatten study-output into eval-page (no nested dirs, no symlinks)
+          # Flatten study-output into eval-page (no nested dirs, no symlinks, no hard links)
           if [ -d /tmp/study-output ]; then
-            rsync -aL /tmp/study-output/ /tmp/eval-page/ 2>/dev/null || \
-              cp -rL /tmp/study-output/* /tmp/eval-page/ 2>/dev/null || true
+            cp -rL /tmp/study-output/* /tmp/eval-page/ 2>/dev/null || true
           fi
           # Copy optional reports
           [ -f /tmp/compliance-report.md ] && cp /tmp/compliance-report.md /tmp/eval-page/
@@ -122,6 +121,13 @@ jobs:
             exit 1
           fi
           echo "No symlinks — clean"
+          echo "=== No hard links check ==="
+          if find /tmp/eval-page -type f -links +1 | grep -q .; then
+            echo "ERROR: hard links found in eval-page"
+            find /tmp/eval-page -type f -links +1
+            exit 1
+          fi
+          echo "No hard links — clean"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
