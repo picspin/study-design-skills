@@ -129,12 +129,10 @@ jobs:
           fi
           echo "No hard links — clean"
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          name: study-evaluation-html
           path: /tmp/eval-page
-          retention-days: 30
 
   deploy-pages:
     needs: generate
@@ -147,13 +145,13 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Download artifact
+      - name: Download Pages artifact
         uses: actions/download-artifact@v4
         with:
-          name: study-evaluation-html
+          name: github-pages
           path: /tmp/eval-page
 
-      - name: Verify artifact
+      - name: Verify Pages artifact
         run: |
           echo "=== Artifact contents ==="
           find /tmp/eval-page -type f
@@ -165,6 +163,4 @@ jobs:
 
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
-        with:
-          artifact_name: study-evaluation-html
+        uses: actions/deploy-pages@v5
