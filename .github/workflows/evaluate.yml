@@ -26,9 +26,20 @@ on:
       - 'skills/study-design-skills/references/checklists/*.md'
       - '.github/workflows/evaluate.yml'
 
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
 jobs:
   generate:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -129,37 +140,13 @@ jobs:
           fi
           echo "No hard links — clean"
 
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: /tmp/eval-page
-
-  deploy-pages:
-    needs: generate
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Download Pages artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: github-pages
-          path: /tmp/eval-page
-
-      - name: Verify Pages artifact
-        run: |
-          echo "=== Artifact contents ==="
-          find /tmp/eval-page -type f
-          if [ ! -s /tmp/eval-page/index.html ]; then
-            echo "ERROR: index.html missing or empty in downloaded artifact"
-            exit 1
-          fi
-          echo "Artifact verified OK"
 
       - name: Deploy to GitHub Pages
         id: deployment
