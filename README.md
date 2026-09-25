@@ -8,6 +8,8 @@
 
 Route any biomedical research proposal through a deterministic 9-step pipeline:
 
+The maintained skill source is `skills/study-design-skills/`. Local agent registrations should point to this directory; the repository-root `study-design-skills/` is retained only for older consumers.
+
 | Step | What | Script |
 |------|------|--------|
 | 1 | **Triage** — clarify the study idea, confirm design | `classify_study.py` |
@@ -19,6 +21,8 @@ Route any biomedical research proposal through a deterministic 9-step pipeline:
 | 7 | **Compliance** — audit against EQUATOR reporting guideline | `check_reporting_compliance.py` |
 | 8 | **Cochrane evidence** — lazy-load existing systematic-review effect estimates | `cochrane_evidence.py` |
 | 9 | **Evaluate** — generate standalone evaluation HTML page | `generate_evaluation_html.py` |
+
+TypeSafe/Jev is an optional, consent-gated judgment layer. It can advise route selection and supply a separate four-dimension score; an explicit confirmed design and rule-based score caps remain authoritative. If the API is unavailable, the package records `not_assessed` rather than inventing a model result.
 
 ### Covered study families
 
@@ -73,6 +77,9 @@ python3 skills/study-design-skills/scripts/validate_study_spec.py study-package.
 
 # 4. Render (Table 1, flow diagram, journal fit, scoring)
 python3 skills/study-design-skills/scripts/generate_study_package.py study-package.json --out-dir outputs/my-study --formats xlsx,csv,html,md
+
+# Optional: after authorizing external transfer of a de-identified study summary
+python3 skills/study-design-skills/scripts/jev_review.py study-package.json --mode both --out jev-judgment.json
 
 # 5. Compliance check
 python3 skills/study-design-skills/scripts/checklist_exists.py --guideline CONSORT

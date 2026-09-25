@@ -172,8 +172,9 @@ def render_flowchart(spec):
     if spec.get("flowchart") is False:
         return ""
     study_type = normalize(spec.get("study_type", ""))
+    family = route_family(spec)
     title_and_comparator = normalize(f"{spec.get('study_title', '')} {spec.get('comparator', '')}")
-    if "controlled interrupted time series" in study_type or "cits" in study_type:
+    if (family == "time_series_qi" and ("controlled" in study_type or "cits" in study_type)) or (not family and ("controlled interrupted time series" in study_type or "cits" in study_type)):
         return """```mermaid
 flowchart TD
   A["Intervention and concurrent control source streams"] --> B["Common eligibility and stable outcome definition"]
@@ -183,7 +184,7 @@ flowchart TD
   E --> F["Complete time points with case-mix and exposure denominators"]
   F --> G["Controlled segmented-regression analysis"]
 ```"""
-    if "interrupted time series" in study_type or "difference-in-differences" in study_type or "difference in differences" in study_type:
+    if family == "time_series_qi" or (not family and ("interrupted time series" in study_type or "difference-in-differences" in study_type or "difference in differences" in study_type)):
         return """```mermaid
 flowchart TD
   A["Clinical/site stream and sampling frame"] --> B["Stable eligibility and outcome definition"]
@@ -193,7 +194,7 @@ flowchart TD
   E --> F["Time points retained/excluded with reasons"]
   F --> G["Segmented regression or panel/event-study analysis"]
 ```"""
-    if any(term in study_type for term in ["rct", "randomized", "clinical trial"]):
+    if family == "randomized_trial" or (not family and any(term in study_type for term in ["rct", "randomized", "clinical trial"])):
         if "crossover" in title_and_comparator or "within the same" in title_and_comparator:
             return """```mermaid
 flowchart TD
@@ -215,7 +216,7 @@ flowchart TD
   F --> H["Analyzed intervention arm (n=)"]
   G --> I["Analyzed control arm (n=)"]
 ```"""
-    if any(term in study_type for term in ["prediction", "prognostic", "medical ai", "survival"]):
+    if family == "prediction" or (not family and any(term in study_type for term in ["prediction", "prognostic", "medical ai", "survival"])):
         return """```mermaid
 flowchart TD
   A["Source population/data repository (n=)"] --> B["Eligible prediction-time observations (n=)"]
@@ -240,7 +241,7 @@ flowchart TD
   E --> K["AI output failure, unavailable data, timeout, or unsafe output (n=)"]
   F --> L["Not reviewed due to workflow, staffing, interface, or alert fatigue (n=)"]
 ```"""
-    if any(term in study_type for term in ["diagnostic", "radiology", "imaging"]):
+    if family == "diagnostic_accuracy" or (not family and any(term in study_type for term in ["diagnostic", "radiology", "imaging"])):
         return """```mermaid
 flowchart TD
   A["Patients/images assessed for eligibility (n=)"] --> B["Excluded before index test (n=)"]
@@ -253,7 +254,7 @@ flowchart TD
   E --> I["Included in accuracy analysis (n=)"]
   F --> I
 ```"""
-    if any(term in study_type for term in ["systematic review", "meta-analysis"]):
+    if family == "evidence_synthesis" or (not family and any(term in study_type for term in ["systematic review", "meta-analysis"])):
         return """```mermaid
 flowchart TD
   A["Records identified from databases/registers"] --> B["Duplicates removed"]
@@ -263,6 +264,56 @@ flowchart TD
   D --> F["Studies included in qualitative synthesis"]
   F --> G["Studies included in each meta-analysis"]
 ```"""
+    if family == "descriptive_observational":
+        counts = spec.get("flow_counts") or {}
+        context = normalize(
+            f"{spec.get('study_title', '')} {spec.get('study_type', '')} "
+            f"{spec.get('population', '')} {spec.get('clinical_area', '')}"
+        )
+        if any(term in context for term in ["survey", "questionnaire", "调查", "问卷"]):
+            if counts.get("subcohort_eligible") is not None:
+                return f"""```mermaid
+flowchart TD
+  A["Cleaned survey dataset (n={counts.get('source_population', 'not reported')})"] --> B["Outside prespecified subcohort (n={counts.get('outside_subcohort', 'not reported')})"]
+  A --> C["Eligible subcohort responses (n={counts.get('subcohort_eligible', 'not reported')})"]
+  C --> D["Excluded by item or data-quality rule (n={counts.get('analysis_specific_excluded', 'not reported')})"]
+  C --> E["Primary cross-sectional analysis (n={counts.get('primary_analysis', 'not reported')})"]
+```"""
+            return f"""```mermaid
+flowchart TD
+  A["Questionnaires submitted (n={counts.get('source_population', 'not reported')})"] --> B["Removed before cleaned dataset (n={counts.get('excluded_before_cleaning', 'not reported')})"]
+  A --> C["Cleaned response dataset (n={counts.get('cleaned_responses', 'not reported')})"]
+  C --> D["Validity-status discrepancy requiring resolution (n={counts.get('validity_discrepancy', 'not reported')})"]
+  C --> E["Reported valid-response set (n={counts.get('reported_valid', 'not reported')})"]
+  E --> F["Item scoring and data-quality rules applied"]
+  F --> G["Primary cross-sectional analysis (n={counts.get('primary_analysis', 'pending')})"]
+  G --> H["Prespecified regional subgroup (n={counts.get('regional_subset', 'not reported')})"]
+```"""
+        groups = spec.get("groups") or []
+        assessed = counts.get("source_population", "not reported")
+        included = counts.get("eligible_at_time_zero", counts.get("primary_analysis", "not reported"))
+        analyzed = counts.get("primary_analysis", "not reported")
+        lines = [
+            "```mermaid",
+            "flowchart TD",
+            f'  A["Assessed for eligibility (n={assessed})"] --> B["Excluded before inclusion, with reasons (n={counts.get("excluded_before_eligibility", "not reported")})"]',
+            f'  A --> C["Included cross-sectional sample (n={included})"]',
+        ]
+        group_nodes = []
+        for index, group in enumerate(groups):
+            node_id = f"G{index + 1}"
+            label = group.get("label", f"Group {index + 1}") if isinstance(group, dict) else str(group)
+            group_n = group.get("n", counts.get(f"group_{index + 1}", "not reported")) if isinstance(group, dict) else counts.get(f"group_{index + 1}", "not reported")
+            lines.append(f'  C --> {node_id}["{label} (n={group_n})"]')
+            group_nodes.append(node_id)
+        if group_nodes:
+            for node_id in group_nodes:
+                lines.append(f'  {node_id} --> Q["Measurements and prespecified quality control"]')
+        else:
+            lines.append('  C --> Q["Measurements and prespecified quality control"]')
+        lines.append(f'  Q --> H["Included in primary cross-sectional analysis (n={analyzed})"]')
+        lines.append("```")
+        return "\n".join(lines)
     return """```mermaid
 flowchart TD
   A["Source data/population (n=)"] --> B["Potentially eligible participants (n=)"]
@@ -320,6 +371,7 @@ def render_missing_and_sensitivity(spec):
     missing = spec.get("missing_data")
     sensitivity = spec.get("sensitivity_analyses")
     study_type = normalize(spec.get("study_type", ""))
+    family = route_family(spec)
     if missing:
         if isinstance(missing, str):
             lines.append(f"- Missing-data plan: {missing}")
@@ -334,17 +386,17 @@ def render_missing_and_sensitivity(spec):
         else:
             lines.append(f"- Sensitivity: {sensitivity}")
     else:
-        if any(term in study_type for term in ["prediction", "prognostic"]):
+        if family == "prediction" or (not family and any(term in study_type for term in ["prediction", "prognostic"])):
             lines.extend([
                 "- Internal validation: bootstrap or repeated resampling; quantify optimism and calibration.",
                 "- External validation: temporal, geographic, or site-based data; report discrimination, calibration, and clinical utility.",
             ])
-        elif any(term in study_type for term in ["interrupted time series", "difference-in-differences", "difference in differences"]):
+        elif family == "time_series_qi" or (not family and any(term in study_type for term in ["interrupted time series", "difference-in-differences", "difference in differences"])):
             lines.extend([
                 "- Check alternative intervention dates, ramp-up exclusion, autocorrelation/seasonality structures, pre-trends, co-interventions, and unaffected outcomes/series.",
                 "- Compare controlled and uncontrolled estimates when a concurrent control is available.",
             ])
-        elif any(term in study_type for term in ["diagnostic", "radiology", "imaging"]):
+        elif family == "diagnostic_accuracy" or (not family and any(term in study_type for term in ["diagnostic", "radiology", "imaging"])):
             lines.extend([
                 "- Assess indeterminate results, missing reference standards, threshold choice, reader/order effects, and device/site variation.",
                 "- For comparative accuracy, preserve paired data and apply QUADAS-C alongside QUADAS-3 in appraisal contexts.",
@@ -503,6 +555,32 @@ def score_study_design(spec):
         blockers.append("Prediction design lacks a clear internal/external validation strategy.")
     if sample_size_result["status"] != "estimated":
         blockers.append("Sample size is not estimable because design-specific assumptions are missing or unsupported.")
+    aggregate_rows = spec.get("precomputed_table_rows") or []
+    flow_counts = spec.get("flow_counts") or {}
+    if aggregate_rows and flow_counts.get("primary_analysis") is not None and flow_counts.get("source_population") is None:
+        blockers.append("The completed aggregate cohort lacks the assessed/screened denominator and pre-inclusion exclusion counts.")
+        flow = max(0.0, flow - 0.5)
+    unavailable_text = " ".join(
+        str(value)
+        for row in aggregate_rows
+        for value in (row.get("groups") or {}).values()
+    ).casefold()
+    if aggregate_rows and "not collected" in unavailable_text:
+        blockers.append("Important characteristics were not collected in at least one group; do not treat unavailable data as absence or structural NA.")
+        table = max(0.0, table - 0.3)
+    target_text = " ".join([
+        str(spec.get("target_jcr_category", "")),
+        str(spec.get("journal", "")),
+        str(spec.get("clinical_area", "")),
+    ]).casefold()
+    acquisition_unreported = any(
+        "acquisition" in normalize(row.get("characteristic"))
+        and "not reported" in " ".join(str(value) for value in (row.get("groups") or {}).values()).casefold()
+        for row in aggregate_rows
+    )
+    if any(term in target_text for term in ["radiology", "imaging"]) and acquisition_unreported:
+        blockers.append("Scanner/acquisition and imaging-QC details are not reported for a radiology-targeted study.")
+        guideline = max(0.0, guideline - 0.4)
 
     scores = {
         "Research question and design fit": (round(design, 1), 2.0),
@@ -534,6 +612,8 @@ def score_study_design(spec):
         elif "validation strategy" in blocker:
             cap = min(cap, 6.5)
         elif "Sample size" in blocker:
+            cap = min(cap, 7.5)
+        elif "assessed/screened" in blocker or "not collected" in blocker or "imaging-QC" in blocker:
             cap = min(cap, 7.5)
     total = min(total, cap)
 
@@ -567,8 +647,20 @@ def score_study_design(spec):
     return scores, round(total, 1), round(ceiling, 1), blockers, strengths, priorities
 
 
+def combine_jev_score(rule_score, spec):
+    review = spec.get("jev_review") or {}
+    if review.get("status") != "completed":
+        return rule_score
+    jev_score = float(review["jev_score_10"])
+    if not 0 <= jev_score <= 10:
+        raise ValueError("jev_review.jev_score_10 must be between 0 and 10")
+    return min(rule_score, round(0.8 * rule_score + 0.2 * jev_score, 1))
+
+
 def render_scoring_report(spec):
     scores, total, ceiling, blockers, strengths, priorities = score_study_design(spec)
+    rule_total = total
+    total = combine_jev_score(total, spec)
     benchmark = spec.get("benchmark") or "JCR Top-1 Medicine benchmark"
     target_category = spec.get("target_jcr_category") or "Medicine, General & Internal unless a specialty category is specified"
     lines = [
@@ -584,6 +676,11 @@ def render_scoring_report(spec):
     ]
     for domain, (score, max_score) in scores.items():
         lines.append(f"| {domain} | {score:.1f}/{max_score:.1f} | Heuristic first-pass score; refine manually against `references/benchmark-scoring.md`. |")
+    review = spec.get("jev_review") or {}
+    if review.get("status") == "completed":
+        lines.extend(["", f"Rule score: {rule_total:.1f}/10; Jev score: {float(review['jev_score_10']):.2f}/10; final score is the lower of the rule score and their 80:20 blend."])
+    elif review:
+        lines.extend(["", f"Jev judgment: not assessed. {review.get('reason', 'No verified model response')}"])
     lines.extend(["", "Critical blockers:"])
     if blockers:
         lines.extend([f"- {item}" for item in blockers])

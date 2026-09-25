@@ -48,6 +48,7 @@ python scripts/classify_study.py proposal.json --format markdown
 ### 2. Resolve the design route
 
 Load `references/route-registry.json`. Select the entry matching `confirmed_design`.
+If a sufficiently specified scientific design is outside the registry, do not force it into a nearby clinical route. Identify the applicable reporting and bias-assessment statements, document the uncovered route, and extend the registry/reference bundle only after confirming the design with the user. The current registry is broad biomedical coverage, not a claim that every scientific design is precompiled.
 
 The route determines:
 
@@ -60,6 +61,8 @@ The route determines:
 - design-specific rubric.
 
 Load every file in `route.references` before authoring the study package. Do not load unrelated design references.
+
+When TypeSafe/Jev is explicitly requested, load `references/typesafe-jev.md` and the installed `typesafe-ai` skill. Use Jev Choice as an advisory design judgment while keeping the user's confirmed design and the route registry authoritative. Use Jev Score as an auditable supplement to the final benchmark; it never replaces source reconciliation, statement-specific requirements, or privacy approval for an external call.
 
 Common routes:
 
@@ -175,7 +178,7 @@ Generate synchronized files:
 
 ```bash
 python scripts/design_study.py study-package.json \
-  --out-dir outputs/study-name \
+  --out-dir /Users/hilbert/Documents/PDBC/study-name \
   --formats xlsx,csv,html,md
 ```
 
@@ -186,6 +189,8 @@ The package must include:
 - formatted XLSX workbook;
 - self-contained printable HTML;
 - Markdown memo;
+
+For this PDBC installation, save every final package under `/Users/hilbert/Documents/PDBC/<study-name>/`. Scratch calculations may stay in the workspace. Never copy identifiable record-level source data into the final package.
 - manifest.
 
 Use `scripts/generate_study_package.py` for patient-level CSV/XLSX computation. Keep calculation, rounding, denominators, and missingness synchronized across formats.
@@ -380,6 +385,7 @@ Before finalizing:
 - `references/sample-size-estimation.md`: sample-size contract.
 - `references/journal-style-profiles.md`: journal-family presentation.
 - `references/benchmark-scoring.md`: 10-point benchmark.
+- `references/typesafe-jev.md`: optional Jev routing and conservative benchmark calibration.
 
 ### Reporting Checklists (NEW — 27 vendored files)
 - `references/reporting-checklists-index.md`: master index with design→guideline mapping.
@@ -397,6 +403,7 @@ Before finalizing:
 - `scripts/design_study.py`: orchestration entry point.
 - `scripts/generate_study_package.py`: synchronized renderer and Table 1 computation.
 - `scripts/sample_size.py`: sample-size calculation toolkit.
+- `scripts/jev_review.py`: optional TypeSafe/Jev design and benchmark judgment adapter.
 - `scripts/import_jcr_reference.py`: JCR benchmark import.
 
 ### Compliance, Evidence & Evaluation Scripts (6)

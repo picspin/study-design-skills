@@ -7,7 +7,7 @@ from unittest import mock
 from pathlib import Path
 
 
-SCRIPT = Path(__file__).parents[1] / "study-design-skills" / "scripts" / "classify_study.py"
+SCRIPT = Path(__file__).parents[1] / "skills/study-design-skills" / "scripts" / "classify_study.py"
 SPEC = importlib.util.spec_from_file_location("classify_study", SCRIPT)
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
@@ -38,6 +38,28 @@ DESIGN_SPEC.loader.exec_module(DESIGN_MODULE)
 
 
 class StudyTriageTests(unittest.TestCase):
+    def test_jev_blend_is_conservative_and_shared_with_markdown(self):
+        spec = {
+            "study_title": "Survey", "study_type": "cross-sectional survey",
+            "jev_review": {"status": "completed", "jev_score_10": 7.27},
+        }
+        _, rule_score, _, _, _, _ = DESIGN_MODULE.score_study_design(spec)
+        combined = DESIGN_MODULE.combine_jev_score(rule_score, spec)
+        self.assertLessEqual(combined, rule_score)
+        self.assertIn(f"Overall score: {combined:.1f} / 10", DESIGN_MODULE.render_scoring_report(spec))
+
+    def test_uncovered_jcr_category_is_not_replaced_by_general_medicine(self):
+        import sys
+        sys.path.insert(0, str(SCRIPT.parent))
+        from generate_study_package import journal_recommendations, load_catalog
+
+        journals, categories = journal_recommendations(
+            {"target_jcr_category": "NURSING", "study_type": "cross-sectional survey"},
+            load_catalog(),
+        )
+        self.assertEqual(categories, ["NURSING"])
+        self.assertEqual(journals, [])
+
     def test_compiler_routes_legacy_rct_to_canonical_contract(self):
         result = COMPILER_MODULE.compile_spec({
             "study_title": "Pragmatic randomized trial",
@@ -185,6 +207,19 @@ class StudyTriageTests(unittest.TestCase):
         self.assertEqual(result["analyzable_n"], 125)
         self.assertEqual(result["recruited_n"], 139)
 
+    def test_prevalence_precision_inflates_for_clustering_and_invalid_responses(self):
+        result = SAMPLE_MODULE.estimate_sample_size({"sample_size": {
+            "method": "prevalence_precision",
+            "prevalence": 0.5,
+            "half_width": 0.03,
+            "alpha": 0.05,
+            "design_effect": 2.0,
+            "loss_fraction": 0.10,
+        }})
+        self.assertEqual(result["status"], "estimated")
+        self.assertEqual(result["analyzable_n"], 2135)
+        self.assertEqual(result["recruited_n"], 2373)
+
     def test_paired_sample_size_requires_directional_discordance(self):
         result = SAMPLE_MODULE.estimate_sample_size({"sample_size": {
             "method": "paired_binary",
@@ -307,7 +342,7 @@ class StudyTriageTests(unittest.TestCase):
         root = Path(__file__).parents[1]
         with tempfile.TemporaryDirectory() as temp_dir:
             subprocess.run(
-                ["python3", str(root / "study-design-skills/scripts/design_study.py"), str(root / "examples/llm_quality_proposal.json"), "--out-dir", temp_dir],
+                ["python3", str(root / "skills/study-design-skills/scripts/design_study.py"), str(root / "examples/llm_quality_proposal.json"), "--out-dir", temp_dir],
                 check=True,
                 capture_output=True,
                 text=True,
@@ -321,7 +356,7 @@ class StudyTriageTests(unittest.TestCase):
         root = Path(__file__).parents[1]
         with tempfile.TemporaryDirectory() as temp_dir:
             subprocess.run(
-                ["python3", str(root / "study-design-skills/scripts/design_study.py"), str(root / "examples/prediction_model_confirmed.json"), "--out-dir", temp_dir, "--formats", "csv,md"],
+                ["python3", str(root / "skills/study-design-skills/scripts/design_study.py"), str(root / "examples/prediction_model_confirmed.json"), "--out-dir", temp_dir, "--formats", "csv,md"],
                 check=True,
                 capture_output=True,
                 text=True,
@@ -355,7 +390,7 @@ class StudyTriageTests(unittest.TestCase):
             spec_path = Path(temp_dir) / "spec.json"
             spec_path.write_text(json.dumps(spec), encoding="utf-8")
             subprocess.run(
-                ["python3", str(root / "study-design-skills/scripts/design_study.py"), str(spec_path), "--out-dir", temp_dir, "--formats", "csv"],
+                ["python3", str(root / "skills/study-design-skills/scripts/design_study.py"), str(spec_path), "--out-dir", temp_dir, "--formats", "csv"],
                 check=True,
                 capture_output=True,
                 text=True,
@@ -380,7 +415,7 @@ class StudyTriageTests(unittest.TestCase):
             spec_path = Path(temp_dir) / "spec.json"
             spec_path.write_text(json.dumps(spec), encoding="utf-8")
             subprocess.run(
-                ["python3", str(root / "study-design-skills/scripts/generate_study_package.py"), str(spec_path), "--out-dir", temp_dir, "--formats", "html,md"],
+                ["python3", str(root / "skills/study-design-skills/scripts/generate_study_package.py"), str(spec_path), "--out-dir", temp_dir, "--formats", "html,md"],
                 check=True,
                 capture_output=True,
                 text=True,
@@ -391,6 +426,72 @@ class StudyTriageTests(unittest.TestCase):
             self.assertNotIn("STARD-style participant and test flow", report)
             self.assertIn("Included cross-sectional sample", memo)
             self.assertNotIn("Reference standard performed", memo)
+
+    def test_cross_sectional_survey_flow_uses_response_cleaning_nodes(self):
+        root = Path(__file__).parents[1]
+        spec = {
+            "study_title": "National blood-culture practice survey",
+            "study_type": "Cross-sectional questionnaire survey",
+            "confirmed_design": "descriptive_observational",
+            "primary_objective": "Estimate guideline-concordant collection practices",
+            "population": "Nurses responding to a national online survey",
+            "flow_counts": {
+                "source_population": 45238,
+                "excluded_before_cleaning": 2200,
+                "cleaned_responses": 43038,
+                "validity_discrepancy": 2913,
+                "reported_valid": 40125,
+                "regional_subset": 9436,
+            },
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            spec_path = Path(temp_dir) / "spec.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            subprocess.run(
+                ["python3", str(root / "skills/study-design-skills/scripts/generate_study_package.py"), str(spec_path), "--out-dir", temp_dir, "--formats", "html,md"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            report = next(Path(temp_dir).glob("*-report.html")).read_text(encoding="utf-8")
+            memo = next(Path(temp_dir).glob("*-memo.md")).read_text(encoding="utf-8")
+            self.assertIn("Questionnaires submitted", report)
+            self.assertIn("Validity-status discrepancy", report)
+            self.assertNotIn("MRI", report)
+            self.assertIn("Cleaned response dataset", memo)
+            self.assertNotIn("Measurements and prespecified quality control", memo)
+
+    def test_survey_subcohort_flow_and_results_share_one_spec(self):
+        root = Path(__file__).parents[1]
+        spec = {
+            "study_title": "Regional survey",
+            "study_type": "Cross-sectional questionnaire survey",
+            "confirmed_design": "descriptive_observational",
+            "primary_objective": "Estimate practice prevalence",
+            "population": "Regional survey respondents",
+            "groups": [{"label": "Untrained", "n": 20}, {"label": "Trained", "n": 80}],
+            "overall_n": 100,
+            "precomputed_table_rows": [{"characteristic": "Hospital", "overall": "100", "groups": {"Untrained": "20", "Trained": "80"}}],
+            "precomputed_result_rows": [{"Indicator": "Collection practice", "n/N": "79/100", "Percent": 79.0}],
+            "flow_counts": {"source_population": 150, "outside_subcohort": 50, "subcohort_eligible": 100, "analysis_specific_excluded": 0, "primary_analysis": 100},
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            spec_path = Path(temp_dir) / "spec.json"
+            spec_path.write_text(json.dumps(spec), encoding="utf-8")
+            subprocess.run(
+                ["python3", str(root / "skills/study-design-skills/scripts/generate_study_package.py"), str(spec_path), "--out-dir", temp_dir, "--formats", "xlsx,csv,html,md"],
+                check=True, capture_output=True, text=True,
+            )
+            report = next(Path(temp_dir).glob("*-report.html")).read_text(encoding="utf-8")
+            self.assertIn("Outside the prespecified subcohort", report)
+            self.assertIn("Collection practice", report)
+            self.assertNotIn("MRI", report)
+            result_csv = next(Path(temp_dir).glob("*-results.csv")).read_text(encoding="utf-8-sig")
+            self.assertIn("79/100", result_csv)
+            from openpyxl import load_workbook
+            workbook = load_workbook(next(Path(temp_dir).glob("*-package.xlsx")), read_only=True)
+            self.assertIn("Results", workbook.sheetnames)
+            workbook.close()
 
     def test_completed_aggregate_package_penalizes_missing_screening_and_imaging_qc(self):
         root = Path(__file__).parents[1]
@@ -415,7 +516,7 @@ class StudyTriageTests(unittest.TestCase):
             spec_path = Path(temp_dir) / "spec.json"
             spec_path.write_text(json.dumps(spec), encoding="utf-8")
             subprocess.run(
-                ["python3", str(root / "study-design-skills/scripts/generate_study_package.py"), str(spec_path), "--out-dir", temp_dir, "--formats", "html"],
+                ["python3", str(root / "skills/study-design-skills/scripts/generate_study_package.py"), str(spec_path), "--out-dir", temp_dir, "--formats", "html"],
                 check=True,
                 capture_output=True,
                 text=True,
@@ -428,7 +529,7 @@ class StudyTriageTests(unittest.TestCase):
         root = Path(__file__).parents[1]
         with tempfile.TemporaryDirectory() as temp_dir:
             subprocess.run(
-                ["python3", str(root / "study-design-skills/scripts/design_study.py"), str(root / "examples/systematic_review_confirmed.json"), "--out-dir", temp_dir, "--formats", "xlsx,csv"],
+                ["python3", str(root / "skills/study-design-skills/scripts/design_study.py"), str(root / "examples/systematic_review_confirmed.json"), "--out-dir", temp_dir, "--formats", "xlsx,csv"],
                 check=True,
                 capture_output=True,
                 text=True,
@@ -454,7 +555,7 @@ class StudyTriageTests(unittest.TestCase):
             spec_path = Path(temp_dir) / "spec.json"
             spec_path.write_text(json.dumps(spec), encoding="utf-8")
             subprocess.run(
-                ["python3", str(root / "study-design-skills/scripts/design_study.py"), str(spec_path), "--out-dir", temp_dir, "--formats", "xlsx"],
+                ["python3", str(root / "skills/study-design-skills/scripts/design_study.py"), str(spec_path), "--out-dir", temp_dir, "--formats", "xlsx"],
                 check=True,
                 capture_output=True,
                 text=True,
@@ -479,7 +580,7 @@ class StudyTriageTests(unittest.TestCase):
             spec_path = Path(temp_dir) / "spec.json"
             spec_path.write_text(json.dumps(spec), encoding="utf-8")
             result = subprocess.run(
-                ["python3", str(root / "study-design-skills/scripts/design_study.py"), str(spec_path)],
+                ["python3", str(root / "skills/study-design-skills/scripts/design_study.py"), str(spec_path)],
                 check=True,
                 capture_output=True,
                 text=True,
@@ -500,7 +601,7 @@ class StudyTriageTests(unittest.TestCase):
             spec_path = Path(temp_dir) / "spec.json"
             spec_path.write_text(json.dumps(spec), encoding="utf-8")
             subprocess.run(
-                ["python3", str(root / "study-design-skills/scripts/design_study.py"), str(spec_path), "--out-dir", temp_dir, "--formats", "html"],
+                ["python3", str(root / "skills/study-design-skills/scripts/design_study.py"), str(spec_path), "--out-dir", temp_dir, "--formats", "html"],
                 check=True,
                 capture_output=True,
                 text=True,
@@ -533,7 +634,7 @@ class StudyTriageTests(unittest.TestCase):
             spec_path = Path(temp_dir) / "spec.json"
             spec_path.write_text(json.dumps(spec), encoding="utf-8")
             subprocess.run(
-                ["python3", str(root / "study-design-skills/scripts/design_study.py"), str(spec_path), "--out-dir", temp_dir, "--formats", "html"],
+                ["python3", str(root / "skills/study-design-skills/scripts/design_study.py"), str(spec_path), "--out-dir", temp_dir, "--formats", "html"],
                 check=True,
                 capture_output=True,
                 text=True,
