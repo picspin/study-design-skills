@@ -21,6 +21,12 @@ jobs:
         run: |
           python installers/install.py --self-test --verbose
 
+      - name: Install test dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Run study-design regression tests
+        run: python -m unittest discover -s tests -q
+
       - name: Validate schema
         run: |
           python -c "

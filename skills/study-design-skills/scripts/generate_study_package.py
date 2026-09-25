@@ -19,6 +19,7 @@ from openpyxl.utils import get_column_letter
 
 from compile_study_spec import compile_spec
 from design_study import (
+    combine_jev_score,
     infer_design_warnings,
     infer_guideline,
     render,
@@ -64,6 +65,14 @@ def text_norm(value):
     return str(value or "").strip().casefold()
 
 
+def is_ai_context(value):
+    text = text_norm(value)
+    return bool(re.search(r"(?<![a-z0-9])ai(?![a-z0-9])", text)) or any(
+        term in text
+        for term in ["clinical ai", "ai healthcare", "artificial intelligence", "cdss", "triage", "workflow"]
+    )
+
+
 def include_smd(spec):
     if "include_smd" in spec:
         return bool(spec["include_smd"])
@@ -90,11 +99,12 @@ def output_table_name(spec):
 
 def p_value_note(spec):
     study = text_norm(spec.get("study_type"))
+    family = (spec.get("route") or {}).get("family")
     if any(term in study for term in ["rct", "randomized", "stepped-wedge"]):
         return "Omitted; baseline significance testing does not validate randomization"
     if any(term in study for term in ["prediction", "prognostic"]):
         return "Omitted; emphasize events, calibration, discrimination, and validation"
-    if any(term in study for term in ["diagnostic", "radiology", "imaging"]):
+    if family == "diagnostic_accuracy" or (not family and any(term in study for term in ["diagnostic", "radiology", "imaging"])):
         return "Omitted from characteristics; accuracy comparisons require paired/design-specific inference"
     if any(term in study for term in ["interrupted time series", "difference-in-differences", "difference in differences"]):
         return "Omitted from characteristics; inference belongs to segmented/panel models"
@@ -303,6 +313,8 @@ def table_columns(spec, data, groups):
         columns.append("SMD")
     if spec.get("include_p_values", False):
         columns.append("P value")
+    if spec.get("include_table_notes", False):
+        columns.append("Data-quality note")
     return columns
 
 
@@ -321,6 +333,26 @@ def build_table(spec, data, groups, variables):
         return columns, rows
     columns = table_columns(spec, data, groups)
     if data is None:
+        precomputed = spec.get("precomputed_table_rows") or []
+        if precomputed:
+            rows = []
+            for source_row in precomputed:
+                row = {column: "" for column in columns}
+                row["Characteristic"] = source_row.get("characteristic", "")
+                if spec.get("include_overall", True):
+                    row[columns[1]] = source_row.get("overall", "")
+                group_values = source_row.get("groups") or {}
+                for group in groups:
+                    column = f"{group['label']} (n={group['n']})"
+                    row[column] = group_values.get(group["label"], group_values.get(str(group["value"]), ""))
+                if "SMD" in columns:
+                    row["SMD"] = source_row.get("smd", "")
+                if "P value" in columns:
+                    row["P value"] = source_row.get("p_value", "")
+                if "Data-quality note" in columns:
+                    row["Data-quality note"] = source_row.get("note", "")
+                rows.append(row)
+            return columns, rows
         rows = []
         for variable in variables:
             row = {column: "" for column in columns}
@@ -422,13 +454,18 @@ def load_catalog(path=DEFAULT_CATALOG):
 def journal_recommendations(spec, catalog, limit=8):
     categories = infer_target_categories(spec)
     requested = text_norm(spec.get("journal"))
+    available = set(catalog["wos_category"].str.upper())
+    if spec.get("target_jcr_category") and not any(category in available for category in categories):
+        return [], categories
     study_text = text_norm(spec.get("study_type"))
-    is_ai = any(term in study_text for term in ["ai", "cdss", "triage", "workflow"])
+    is_ai = is_ai_context(study_text)
     is_clinical = any(term in study_text for term in ["observational", "cohort", "rwe", "trial", "diagnostic", "clinical"])
     candidates = []
     for _, row in catalog.iterrows():
         category = str(row["wos_category"]).upper()
         name = str(row["journal"])
+        if name.casefold().startswith(("annual review", "trends in")):
+            continue
         score = 2.8
         reasons = []
         if category in categories:
@@ -506,6 +543,7 @@ def category_benchmark_requirements(categories):
 
 def flow_steps(spec):
     study = text_norm(spec.get("study_type"))
+    layout = (spec.get("route") or {}).get("flow_layout", "")
     counts = spec.get("flow_counts") or {}
 
     def node(label, key):
@@ -575,7 +613,7 @@ def flow_steps(spec):
             node(f"Primary ITT analysis: {primary}", "primary_analysis"),
             node("Secondary analysis sets: " + "; ".join(str(item) for item in secondary), "secondary_analysis"),
         ]
-    if any(term in study for term in ["diagnostic", "radiology", "imaging"]):
+    if layout in {"stard_accuracy", "stard_comparative"} or (not layout and any(term in study for term in ["diagnostic", "radiology", "imaging"])):
         primary = spec.get("primary_objective") or "Primary diagnostic-accuracy or paired-comparison analysis"
         secondary = spec.get("secondary_objectives") or ["Reader, lesion, subgroup, management-impact, and safety analyses"]
         if isinstance(secondary, str):
@@ -592,7 +630,7 @@ def flow_steps(spec):
             node(f"Primary analysis: {primary}", "primary_analysis"),
             node("Secondary analysis sets: " + "; ".join(str(item) for item in secondary), "secondary_analysis"),
         ]
-    if any(term in study for term in ["ai", "cdss", "triage", "workflow"]):
+    if is_ai_context(study):
         return ["Eligible encounters", "AI trigger", "Output generated", "Shown to clinician", "Accepted/modified/overridden", "Downstream action", "Safety and outcome ascertainment"]
     if any(term in study for term in ["systematic review", "meta-analysis"]):
         return [
@@ -612,6 +650,11 @@ def enrollment_flow_html(spec):
     study = text_norm(spec.get("study_type"))
     layout = (spec.get("route") or {}).get("flow_layout", "")
     title_text = text_norm(f"{spec.get('study_title', '')} {spec.get('comparator', '')}")
+    context_text = text_norm(
+        f"{spec.get('study_title', '')} {spec.get('study_type', '')} "
+        f"{spec.get('population', '')} {spec.get('clinical_area', '')}"
+    )
+    is_survey = any(term in context_text for term in ["survey", "questionnaire", "调查", "问卷"])
     counts = spec.get("flow_counts") or {}
     exclusions = spec.get("flow_exclusions") or {}
 
@@ -642,13 +685,17 @@ def enrollment_flow_html(spec):
         right_head = f'<div class="flow-branch-label">{html.escape(right_label)}</div>' if right_label else ""
         return f'<div class="flow-split" aria-hidden="true"><span></span><span></span></div><div class="flow-branches"><div>{left_head}{left}</div><div>{right_head}{right}</div></div>'
 
+    def multi_branches(items):
+        cards = "".join(f'<div><div class="flow-branch-label">{html.escape(str(label))}</div>{content}</div>' for label, content in items)
+        return f'<div class="flow-multi-branches">{cards}</div>'
+
     def arm_side(main, excluded):
         return f'<div class="flow-arm-row"><div>{main}</div><div class="flow-arm-arrow" aria-hidden="true">&#8594;</div><div>{excluded}</div></div>'
 
     standard = "Study-specific participant flow"
     caption = "Flow of participants or examinations through eligibility, allocation/exposure, attrition, and final analysis."
 
-    if layout == "prisma_review" or any(term in study for term in ["systematic review", "meta-analysis"]):
+    if layout == "prisma_review" or (not layout and any(term in study for term in ["systematic review", "meta-analysis"])):
         standard = "PRISMA 2020"
         body = side(box("Records identified from databases and other sources", "records_identified"), exclusion("Records removed before screening", "records_removed", ["Duplicate records", "Automation or other prespecified removals"]))
         body += down() + side(box("Titles and abstracts screened", "records_screened"), exclusion("Records excluded", "records_excluded", ["Clearly ineligible by title/abstract"]))
@@ -656,7 +703,7 @@ def enrollment_flow_html(spec):
         body += down() + box("Studies included in qualitative synthesis", "included_studies", kind="final")
         body += down() + box("Studies included in each meta-analysis", "meta_analysis_studies", kind="final")
         caption = "PRISMA 2020 flow of records, reports, and studies through identification, screening, eligibility, and synthesis."
-    elif layout in {"consort_trial", "stepped_wedge"} or any(term in study for term in ["rct", "randomized", "trial"]):
+    elif layout in {"consort_trial", "stepped_wedge"} or (not layout and any(term in study for term in ["rct", "randomized", "trial"])):
         standard = "CONSORT-style participant flow"
         crossover = "crossover" in title_text or "within the same" in title_text
         body = side(box("Assessed for eligibility", "source_population"), exclusion("Excluded before randomization", "excluded_before_randomization", ["Did not meet eligibility criteria", "Declined participation", "Other prespecified reasons"]))
@@ -672,7 +719,7 @@ def enrollment_flow_html(spec):
             right = box("Allocated to control", "control_allocated") + down() + box("Received control", "control_received") + down() + arm_side(box("Analyzed in control arm", "control_analyzed", kind="final"), exclusion("Lost/discontinued", "control_lost", ["Lost to follow-up", "Discontinued with reasons"]))
             body += branches(left, right, "Intervention", "Control")
             caption = "CONSORT-style participant flow through enrollment, randomization, allocation, follow-up, and analysis."
-    elif layout in {"stard_accuracy", "stard_comparative"} or any(term in study for term in ["diagnostic", "radiology", "imaging"]):
+    elif layout in {"stard_accuracy", "stard_comparative"} or (not layout and any(term in study for term in ["diagnostic", "radiology", "imaging"])):
         standard = "STARD-style participant and test flow"
         body = side(box("Patients/images assessed for eligibility", "source_population"), exclusion("Excluded before index testing", "excluded_before_index", ["Did not meet eligibility criteria", "Contraindication or unavailable imaging", "Other prespecified reasons"]))
         body += down() + side(box("Index test completed", "index_tests_complete"), exclusion("Index test unavailable or indeterminate", "index_test_excluded", ["Acquisition failure", "Non-evaluable or indeterminate result"]))
@@ -680,13 +727,13 @@ def enrollment_flow_html(spec):
         body += down() + branches(box("Target condition present", "disease_present"), box("Target condition absent", "disease_absent"))
         body += '<div class="flow-join" aria-hidden="true"><span></span><span></span></div>' + box("Included in diagnostic accuracy analysis", "primary_analysis", "Report patient, image/lesion, and reader denominators separately", kind="final")
         caption = "STARD-style flow through eligibility, index testing, reference-standard verification, and diagnostic accuracy analysis."
-    elif layout in {"tripod_development", "tripod_validation"} or any(term in study for term in ["prediction", "prognostic", "survival", "medical ai"]):
+    elif layout in {"tripod_development", "tripod_validation"} or (not layout and any(term in study for term in ["prediction", "prognostic", "survival", "medical ai"])):
         standard = "TRIPOD+AI-style cohort flow"
         body = side(box("Source population/data repository", "source_population"), exclusion("Excluded before prediction time zero", "excluded_before_time_zero", ["Ineligible population or timing", "No usable outcome window", "Invalid or unavailable predictors"]))
         body += down() + box("Modeling cohort at prediction time zero", "modeling_cohort", "Report outcome events and censoring", kind="anchor")
         body += branches(box("Development and internal validation cohort", "development_cohort", "Include events"), box("External/temporal/geographic validation cohort", "external_validation_cohort", "Include events"), "Development", "Validation")
         caption = "TRIPOD+AI-style flow from source data through eligibility, prediction time zero, development, and independent validation."
-    elif layout in {"controlled_time_series", "time_series", "comparative_panel"} or any(term in study for term in ["interrupted time series", "difference-in-differences", "difference in differences"]):
+    elif layout in {"controlled_time_series", "time_series", "comparative_panel"} or (not layout and any(term in study for term in ["interrupted time series", "difference-in-differences", "difference in differences"])):
         standard = "STROBE/RECORD and SQUIRE-style encounter flow"
         body = side(box("Cardiovascular CT examinations in the source ward", "source_population"), exclusion("Excluded before cohort entry", "excluded_before_eligibility", ["Outside the prespecified CT population", "Duplicate/test/invalid injector record", "No linkable examination or outcome record"]))
         body += down() + box("Eligible examinations with stable definitions and denominators", "eligible_at_time_zero", kind="anchor")
@@ -695,7 +742,7 @@ def enrollment_flow_html(spec):
         body += branches(left, right, "Pre-implementation", "Post-implementation")
         body += '<div class="flow-join" aria-hidden="true"><span></span><span></span></div>' + box("Included in segmented time-series analysis", "primary_analysis", "Report examinations, time points, events, and exposure denominators", kind="final")
         caption = "STROBE/RECORD and SQUIRE-style flow of cardiovascular CT examinations through eligibility, calendar-period assignment, exclusions, and segmented time-series analysis."
-    elif any(term in study for term in ["ai", "cdss", "triage", "workflow"]):
+    elif is_ai_context(study):
         standard = "ICAML/DECIDE-AI-style clinical workflow flow"
         body = side(box("Eligible clinical encounters", "source_population"), exclusion("Excluded before AI workflow entry", "excluded_before_trigger", ["Outside deployment scope", "Missing required input", "Safety or governance exclusion"]))
         body += down() + side(box("AI trigger met and output generated", "ai_output_generated"), exclusion("AI output failure", "ai_output_failed", ["Unavailable data", "Timeout/interface failure", "Unsafe or invalid output"]))
@@ -703,6 +750,36 @@ def enrollment_flow_html(spec):
         body += down() + box("Accepted, modified, overridden, or ignored", "clinician_action")
         body += down() + box("Outcome and safety ascertainment complete", "primary_analysis", kind="final")
         caption = "ICAML/DECIDE-AI-style flow from eligible encounters through AI triggering, clinician interaction, downstream action, and outcome ascertainment."
+    elif layout == "strobe_cohort":
+        standard = "STROBE-style participant flow"
+        if is_survey:
+            if counts.get("subcohort_eligible") is not None:
+                body = side(box("Cleaned survey response dataset", "source_population"), exclusion("Outside the prespecified subcohort", "outside_subcohort", ["Outside the prespecified geography, population, or time window"]))
+                body += down() + side(box("Eligible subcohort responses", "subcohort_eligible", "Report subcohort definition before analysis", kind="anchor"), exclusion("Excluded by item or data-quality rules", "analysis_specific_excluded", ["Structurally inapplicable question", "Prespecified missing or invalid primary outcome", "Reason-specific counts for each analysis"]))
+                body += down() + box("Included in primary cross-sectional analysis", "primary_analysis", "Report respondent, hospital, and region denominators", kind="final")
+                caption = "STROBE-style flow from the cleaned survey dataset through a prespecified subcohort and final analysis."
+            else:
+                body = side(box("Questionnaires submitted", "source_population"), exclusion("Removed before the cleaned dataset", "excluded_before_cleaning", ["Duplicate submission", "Ineligible respondent", "Incomplete or invalid response", "Reason-specific counts pending reconciliation"]))
+                body += down() + side(box("Records in the cleaned response dataset", "cleaned_responses", "Preserve respondent, hospital, and province denominators", kind="anchor"), exclusion("Validity-status discrepancy requiring resolution", "validity_discrepancy", ["Records present in the cleaned file but absent from the reported valid denominator", "Reason-specific counts pending reconciliation"]))
+                body += down() + box("Reported valid-response set", "reported_valid", "Use only after reproducing every exclusion from source data")
+                body += down() + side(box("Scoring and data-quality rules applied", "quality_control_complete", "Lock the item-level codebook before deriving domains or total scores"), exclusion("Excluded from a specific analysis", "analysis_specific_excluded", ["Structurally inapplicable conditional item", "Missing covariate or outcome under the prespecified missing-data rule", "Do not convert conditional missingness to an incorrect response"]))
+                body += down() + box("Included in primary cross-sectional analysis", "primary_analysis", "Report respondent, hospital, province, and analysis-specific denominators", kind="final")
+                if counts.get("regional_subset") is not None:
+                    body += down() + box("Prespecified regional subgroup analysis", "regional_subset", "Definition and external policy basis must be documented", kind="final")
+                caption = "STROBE-style flow of survey responses through submission, cleaning, denominator reconciliation, scoring, and analysis."
+        else:
+            body = side(box("Assessed for eligibility", "source_population"), exclusion("Excluded before final inclusion", "excluded_before_eligibility", ["Eligibility criteria not met", "Declined participation", "MRI contraindication or structural abnormality", "Non-evaluable image quality"]))
+            body += down() + box("Included cross-sectional study sample", "eligible_at_time_zero", "Report recruitment source and matching/frequency-sampling method", kind="anchor")
+            group_items = []
+            for index, group in enumerate(spec.get("groups") or []):
+                label = group.get("label", f"Group {index + 1}") if isinstance(group, dict) else str(group)
+                detail = group.get("description") if isinstance(group, dict) else None
+                group_items.append((label, box(label, f"group_{index + 1}", detail)))
+            if group_items:
+                body += down() + multi_branches(group_items)
+            body += down() + side(box("MRI, clinical assessment, and prespecified quality control complete", "mri_complete"), exclusion("Excluded after acquisition or data linkage", "mri_excluded", ["Severe motion or processing failure", "Missing primary regional measurement", "Missing prespecified clinical linkage"]))
+            body += down() + box("Included in primary cross-sectional analysis", "primary_analysis", "Report group, MRI, correlation, and exploratory ROC denominators separately", kind="final")
+            caption = "STROBE-style flow through recruitment, eligibility, cross-sectional group assignment, MRI quality control, and analysis."
     else:
         standard = "STROBE/RECORD-style participant flow"
         body = side(box("Source population/data repository", "source_population"), exclusion("Excluded before eligibility", "excluded_before_eligibility", ["Outside sampling frame", "Duplicate or invalid record"]))
@@ -744,7 +821,7 @@ def score_rows(spec, data=None):
     blockers = package_blockers + blockers
     priorities = package_blockers + priorities
     total = min(round(sum(score for score, _ in scores.values()), 1), package_cap, total)
-    ceiling = max(ceiling, min(9.8, total + 2.0))
+    total = combine_jev_score(total, spec)
     rows = [{"domain": domain, "score": score, "maximum": maximum} for domain, (score, maximum) in scores.items()]
     return rows, total, ceiling, blockers, strengths, priorities
 
@@ -764,6 +841,20 @@ def write_xlsx(path, spec, columns, rows, journals, categories, scoring):
     score_sheet = workbook.create_sheet("Benchmark")
     sample_sheet = workbook.create_sheet("Sample Size")
     notes_sheet = workbook.create_sheet("Methods Notes")
+    result_rows = spec.get("precomputed_result_rows") or []
+    if result_rows:
+        results_sheet = workbook.create_sheet("Results", 1)
+        result_columns = list(result_rows[0])
+        results_sheet.append(result_columns)
+        for result_row in result_rows:
+            results_sheet.append([result_row.get(column, "") for column in result_columns])
+        results_sheet.freeze_panes = "B2"
+        results_sheet.auto_filter.ref = results_sheet.dimensions
+        for cell in results_sheet[1]:
+            cell.fill = PatternFill("solid", fgColor="0F766E")
+            cell.font = Font(name="Arial", size=10, bold=True, color="FFFFFF")
+        for column_index, column in enumerate(result_columns, start=1):
+            results_sheet.column_dimensions[get_column_letter(column_index)].width = min(52, max(16, len(column) + 4))
 
     dark = "162B36"
     accent = "0F766E"
@@ -848,7 +939,7 @@ def write_xlsx(path, spec, columns, rows, journals, categories, scoring):
     journal_sheet.column_dimensions["E"].width = 48
 
     score_rows_data, total, ceiling, blockers, strengths, priorities = scoring
-    benchmark_family = " / ".join(item["journal"] for item in journals[:3])
+    benchmark_family = " / ".join(item["journal"] for item in journals[:3]) or "No category-matched journal in supplied catalog"
     score_sheet.append(["JCR Top-Journal Benchmark", f"{total:.1f}/10", "Post-revision ceiling", f"{ceiling:.1f}/10"])
     score_sheet.append(["Domain", "Score", "Maximum", "Assessment"])
     for item in score_rows_data:
@@ -859,6 +950,10 @@ def write_xlsx(path, spec, columns, rows, journals, categories, scoring):
     score_sheet.append(["Strengths", "; ".join(strengths) if strengths else "Requires manual assessment"])
     score_sheet.append(["Revision priorities", "; ".join(priorities[:5])])
     score_sheet.append(["Category requirements", " ".join(category_benchmark_requirements(categories))])
+    if (spec.get("jev_review") or {}).get("status") == "completed":
+        score_sheet.append(["Jev judgment", f"{spec['jev_review']['jev_score_10']:.2f}/10", "", "Final score: min(rule score, 80% rule + 20% Jev); rule caps remain binding."])
+    elif spec.get("jev_review"):
+        score_sheet.append(["Jev judgment", "Not assessed", "", str(spec["jev_review"].get("reason", "No verified model response"))])
     for row_index in range(11, score_sheet.max_row + 1):
         score_sheet.merge_cells(start_row=row_index, start_column=2, end_row=row_index, end_column=4)
     style_sheet(score_sheet, 4, dark, accent, white, thin, header_row=2)
@@ -960,11 +1055,37 @@ def write_html(path, spec, columns, rows, journals, categories, scoring):
         f"<tr><td>{html.escape(item['domain'])}</td><td>{item['score']:.1f}/{item['maximum']:.1f}</td></tr>" for item in score_rows_data
     )
     enrollment_figure = enrollment_flow_html(spec)
+    result_rows = spec.get("precomputed_result_rows") or []
+    results_html = ""
+    if result_rows:
+        result_columns = list(result_rows[0])
+        results_html = (
+            '<h2>Observed item results</h2>'
+            + html_table(result_columns, result_rows)
+            + '<p class="fine">Each row retains its own denominator, source option mapping, and interpretation status.</p>'
+        )
     blocker_html = "".join(f"<li>{html.escape(item)}</li>" for item in blockers) or "<li>No automatic critical blocker detected; manual review remains required.</li>"
     priority_html = "".join(f"<li>{html.escape(item)}</li>" for item in priorities[:5])
     warnings_html = "".join(f"<li>{html.escape(item)}</li>" for item in infer_design_warnings(spec))
     requirements_html = "".join(f"<li>{html.escape(item)}</li>" for item in category_benchmark_requirements(categories))
-    benchmark_family = " / ".join(item["journal"] for item in journals[:3])
+    benchmark_family = " / ".join(item["journal"] for item in journals[:3]) or "No category-matched journal in supplied catalog"
+    if not journals:
+        journal_rows = '<tr><td colspan="5">The supplied JCR catalog does not cover the requested category. Journal-specific fit is not assessable from this catalog.</td></tr>'
+    jev_review = spec.get("jev_review") or {}
+    jev_html = ""
+    if jev_review.get("status") == "completed":
+        dimension_rows = "".join(
+            f"<tr><td>{html.escape(key.replace('_', ' ').title())}</td><td>{float(value['score_0_to_4']):.2f}/4</td><td>{float(value.get('confidence') or 0):.2f}</td></tr>"
+            for key, value in (jev_review.get("dimensions") or {}).items()
+        )
+        jev_html = (
+            f'<p class="fine">Jev ({html.escape(str(jev_review.get("model", "unknown")))}) judgment: '
+            f'{float(jev_review["jev_score_10"]):.2f}/10. Final score = min(rule score, '
+            '0.8 × rule score + 0.2 × Jev score); rule caps remain binding.</p>'
+            f'<div class="table-wrap"><table><thead><tr><th>Jev dimension</th><th>Score</th><th>Confidence</th></tr></thead><tbody>{dimension_rows}</tbody></table></div>'
+        )
+    elif jev_review:
+        jev_html = f'<p class="fine">Jev judgment: not assessed. {html.escape(str(jev_review.get("reason", "No verified model response")))}</p>'
     sample = estimate_sample_size(spec)
     if sample["status"] == "estimated":
         assumption_rows = "".join(f"<tr><td>{html.escape(str(key))}</td><td>{html.escape(str(value))}</td></tr>" for key, value in sample["assumptions"].items())
@@ -996,7 +1117,7 @@ main{{max-width:1180px;margin:0 auto;padding:28px 24px 60px}} h2{{font-size:21px
 	.flow-count{{display:block;color:#0b62c4;font-weight:700;margin-top:3px}} .flow-box.final .flow-count{{color:#fff}} .flow-detail{{display:block;font-size:12px;color:var(--muted);margin-top:4px}} .flow-box.final .flow-detail{{color:#e0ecee}}
 	.flow-down{{height:34px;text-align:center;font-size:29px;line-height:34px;color:#285b69;font-weight:400}} .flow-row{{display:grid;grid-template-columns:minmax(0,1fr) 52px minmax(0,1fr);align-items:center}} .flow-side-arrow{{font-size:29px;text-align:center;color:#285b69}}
 	.flow-arm-row{{display:grid;grid-template-columns:minmax(0,1fr) 24px minmax(0,1fr);align-items:center}} .flow-arm-row .flow-box{{padding:9px;min-height:92px;font-size:12px}} .flow-arm-row .flow-box.exclusion ul{{font-size:10px;padding-left:14px}} .flow-arm-arrow{{text-align:center;color:#285b69;font-size:20px}}
-	.flow-branches{{display:grid;grid-template-columns:1fr 1fr;gap:48px}} .flow-branch-label{{text-align:center;font-size:12px;font-weight:700;color:var(--teal);text-transform:uppercase;margin:0 0 7px}} .flow-split,.flow-join{{height:42px;position:relative;margin:0 24%}}
+	.flow-branches{{display:grid;grid-template-columns:1fr 1fr;gap:48px}} .flow-multi-branches{{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:24px;margin:18px 0 8px}} .flow-branch-label{{text-align:center;font-size:12px;font-weight:700;color:var(--teal);text-transform:uppercase;margin:0 0 7px}} .flow-split,.flow-join{{height:42px;position:relative;margin:0 24%}}
 	.flow-split::before{{content:"";position:absolute;left:0;right:0;top:20px;border-top:2px solid #285b69}} .flow-split::after{{content:"";position:absolute;left:50%;top:0;height:21px;border-left:2px solid #285b69}} .flow-split span::before{{content:"";position:absolute;top:20px;height:15px;border-left:2px solid #285b69}} .flow-split span::after{{content:"";position:absolute;top:33px;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #285b69}} .flow-split span:first-child::before{{left:0}} .flow-split span:last-child::before{{right:0}} .flow-split span:first-child::after{{left:-5px}} .flow-split span:last-child::after{{right:-5px}}
 	.flow-join::before{{content:"";position:absolute;left:0;right:0;top:0;border-top:2px solid #285b69}} .flow-join::after{{content:"";position:absolute;left:calc(50% - 5px);top:22px;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #285b69}} .flow-join span:first-child::before,.flow-join span:last-child::before{{content:"";position:absolute;top:0;height:21px;border-left:2px solid #285b69}} .flow-join span:first-child::before{{left:0}} .flow-join span:last-child::before{{right:0}} .flow-join span:first-child::after{{content:"";position:absolute;left:50%;top:0;height:23px;border-left:2px solid #285b69}} figcaption{{max-width:900px;margin:15px auto 0;color:var(--muted);font-size:12px}}
 	.warning{{border-left:4px solid var(--warn)}} .fine{{color:var(--muted);font-size:12px}} ul,ol{{padding-left:20px}} @media print{{header{{padding:24px}} main{{padding:16px}} .table-wrap{{overflow:visible}}}}
@@ -1005,7 +1126,7 @@ main{{max-width:1180px;margin:0 auto;padding:28px 24px 60px}} h2{{font-size:21px
 	  .flow-canvas{{min-width:0;padding:4px 0 8px}}
 	  .flow-row,.flow-arm-row{{grid-template-columns:1fr}}
 	  .flow-side-arrow,.flow-arm-arrow{{height:30px;line-height:30px;transform:rotate(90deg)}}
-	  .flow-branches{{grid-template-columns:1fr;gap:28px}}
+	  .flow-branches,.flow-multi-branches{{grid-template-columns:1fr;gap:28px}}
 	  .flow-split,.flow-join{{display:none}}
 	  .flow-arm-row .flow-box{{min-height:66px;font-size:12px}}
 	  .flow-branch-label{{margin-top:8px}}
@@ -1014,11 +1135,11 @@ main{{max-width:1180px;margin:0 auto;padding:28px 24px 60px}} h2{{font-size:21px
 <header><h1>{html.escape(spec.get('study_title') or 'Study Design and Table 1 Report')}</h1><p>{html.escape(spec.get('population', 'Study population'))}</p></header>
 <main>
 <section class="meta"><div class="panel"><div class="label">Study design</div><strong>{html.escape(str(spec.get('study_type','Unspecified')))}</strong></div><div class="panel"><div class="label">Guideline</div><strong>{html.escape(infer_guideline(spec))}</strong></div><div class="panel"><div class="label">Time zero</div><strong>{html.escape(str(spec.get('time_zero','Not specified')))}</strong></div><div class="panel"><div class="label">Target categories</div><strong>{html.escape('; '.join(categories))}</strong></div></section>
-<h2>{html.escape(output_table_name(spec))}</h2>{html_table(columns, rows)}<p class="fine">The characteristics object, denominator rules, balance metrics, and inferential columns are selected from the confirmed study design.</p>
+<h2>{html.escape(output_table_name(spec))}</h2>{html_table(columns, rows)}<p class="fine">The characteristics object, denominator rules, balance metrics, and inferential columns are selected from the confirmed study design.</p>{results_html}
 	<h2>Enrollment and analysis flow</h2>{enrollment_figure}
 <h2>Sample size estimation</h2>{sample_html}<div class="panel"><strong>Interpretation caveats</strong><ul>{sample_caveats}</ul></div>
 <h2>Journal scope fit</h2><div class="table-wrap"><table><thead><tr><th>Journal</th><th>WoS category</th><th>2025 IF</th><th>Scope fit /10</th><th>Rationale</th></tr></thead><tbody>{journal_rows}</tbody></table></div><p class="fine">Source: user-provided JCR-70.xlsx, treated as a JCR 2026 reference set with a 2025 impact-factor column. Scope-fit scores are not acceptance probabilities and do not substitute for current author-instruction checks.</p>
-<h2>JCR top-journal benchmark</h2><p><strong>Benchmark family:</strong> {html.escape(benchmark_family)}</p><div class="scores"><div class="panel"><div class="label">Current score</div><div class="big">{total:.1f}/10</div></div><div class="panel"><div class="label">Post-revision ceiling</div><div class="big">{ceiling:.1f}/10</div></div></div><div class="table-wrap"><table><thead><tr><th>Domain</th><th>Score</th></tr></thead><tbody>{domain_rows}</tbody></table></div>
+<h2>JCR top-journal benchmark</h2><p><strong>Benchmark family:</strong> {html.escape(benchmark_family)}</p><div class="scores"><div class="panel"><div class="label">Current score</div><div class="big">{total:.1f}/10</div></div><div class="panel"><div class="label">Post-revision ceiling</div><div class="big">{ceiling:.1f}/10</div></div></div><div class="table-wrap"><table><thead><tr><th>Domain</th><th>Score</th></tr></thead><tbody>{domain_rows}</tbody></table></div>{jev_html}
 <div class="meta"><div class="panel warning"><strong>Critical blockers</strong><ul>{blocker_html}</ul></div><div class="panel"><strong>Revision priorities</strong><ol>{priority_html}</ol></div></div>
 <h2>Category benchmark requirements</h2><div class="panel"><ul>{requirements_html}</ul></div>
 <h2>Design-specific method stack</h2><div class="meta"><div class="panel"><strong>Reporting guidelines</strong><ul>{''.join(f'<li>{html.escape(item)}</li>' for item in spec.get('guideline_stack', []))}</ul></div><div class="panel"><strong>Bias/appraisal tools</strong><ul>{''.join(f'<li>{html.escape(item)}</li>' for item in spec.get('bias_tools', []))}</ul></div><div class="panel"><strong>Analysis/validation methods</strong><ul>{''.join(f'<li>{html.escape(item)}</li>' for item in spec.get('analysis_methods', []))}</ul></div></div>
@@ -1048,6 +1169,11 @@ def generate_package(spec, spec_dir, output_dir, formats):
         path = output_dir / f"{stem}-table1.csv"
         write_csv(path, columns, rows)
         outputs.append(path)
+        result_rows = spec.get("precomputed_result_rows") or []
+        if result_rows:
+            path = output_dir / f"{stem}-results.csv"
+            write_csv(path, list(result_rows[0]), result_rows)
+            outputs.append(path)
     if "xlsx" in formats:
         path = output_dir / f"{stem}-package.xlsx"
         write_xlsx(path, spec, columns, rows, journals, categories, scoring)
