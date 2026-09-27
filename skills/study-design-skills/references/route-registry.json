@@ -101,7 +101,8 @@
         "study-intent-triage.md",
         "design-method-matrix.md",
         "flowchart-design.md",
-        "table1-statistical-decisions.md"
+        "table1-statistical-decisions.md",
+        "sample-size-estimation.md"
       ],
       "required_content": ["primary_objective", "population"],
       "forbidden_defaults": ["propensity-score matching without a causal estimand"]

@@ -20,6 +20,7 @@ on:
         required: false
         default: ''
   push:
+    branches: [main]
     paths:
       - 'examples/*.json'
       - 'skills/study-design-skills/scripts/*.py'

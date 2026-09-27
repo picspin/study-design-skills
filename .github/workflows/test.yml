@@ -21,54 +21,54 @@ jobs:
         run: |
           python installers/install.py --self-test --verbose
 
+      - name: Install test dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Run study-design regression tests
+        run: python -m unittest discover -s tests -q
+
       - name: Validate schema
         run: |
-          python -c "
-import json
-schema = json.loads(open('skills/study-design-skills/schemas/study-package.schema.json').read())
-assert 'required' in schema
-assert schema['required'][0] == 'schema_version'
-print(f'Schema OK — {len(schema[\"properties\"])} properties')
-"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          schema = json.loads(Path('skills/study-design-skills/schemas/study-package.schema.json').read_text())
+          assert 'required' in schema
+          assert schema['required'][0] == 'schema_version'
+          print(f'Schema OK: {len(schema["properties"])} properties')
+          PY
 
       - name: Validate route-registry
         run: |
-          python -c "
-import json
-reg = json.loads(open('skills/study-design-skills/references/route-registry.json').read())
-assert 'routes' in reg
-for rid, r in reg['routes'].items():
-    assert 'family' in r, f'{rid} missing family'
-    assert 'references' in r, f'{rid} missing references'
-    assert 'rubric' in r, f'{rid} missing rubric'
-print(f'Registry OK — {len(reg[\"routes\"])} routes')
-"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          reg = json.loads(Path('skills/study-design-skills/references/route-registry.json').read_text())
+          assert 'routes' in reg
+          for rid, route in reg['routes'].items():
+              assert 'family' in route, f'{rid} missing family'
+              assert 'references' in route, f'{rid} missing references'
+              assert 'rubric' in route, f'{rid} missing rubric'
+          print(f'Registry OK: {len(reg["routes"])} routes')
+          PY
 
       - name: Verify all vendored checklists
         run: |
-          python -c "
-from pathlib import Path
-checklist_dir = Path('skills/study-design-skills/references/checklists')
-files = sorted(checklist_dir.glob('*.md'))
-assert len(files) >= 27, f'Expected ≥27 checklist files, found {len(files)}'
-for f in files:
-    content = f.read_text()
-    assert 'acronym:' in content, f'{f.name} missing frontmatter acronym'
-    assert '---' in content, f'{f.name} missing frontmatter delimiter'
-    item_count = sum(1 for line in content.split(chr(10)) if line.startswith('|'))
-    print(f'  {f.name} ({item_count} lines)')
-print(f'All {len(files)} checklist files verified')
-"
+          python - <<'PY'
+          from pathlib import Path
+          files = sorted(Path('skills/study-design-skills/references/checklists').glob('*.md'))
+          assert len(files) >= 27, f'Expected at least 27 checklist files, found {len(files)}'
+          for file in files:
+              content = file.read_text()
+              assert 'acronym:' in content, f'{file.name} missing frontmatter acronym'
+              assert '---' in content, f'{file.name} missing frontmatter delimiter'
+              item_count = sum(line.startswith('|') for line in content.splitlines())
+              print(f'  {file.name} ({item_count} table lines)')
+          print(f'All {len(files)} checklist files verified')
+          PY
 
-      - name: Check all scripts import
-        run: |
-          for py in skills/study-design-skills/scripts/*.py; do
-            if [[ "$(basename $py)" == "_batch_create_checklists.py" ]]; then
-              continue  # build helper, not a production script
-            fi
-            python -c "import ast; ast.parse(open('$py').read()); print(f'  OK {$(basename $py)}')"
-            echo "  SKIP import test for $(basename $py)"  # some have __main__ guards
-          done
+      - name: Check Python syntax
+        run: python -m compileall -q skills/study-design-skills/scripts
 
       - name: Verify SKILL.md frontmatter
         run: |
